@@ -152,7 +152,8 @@ def book_title_getter(x: str) -> str:
 
 def update(fs: FileSystem, *, prefix, writer: MarkdownWriter, force=False):
     tree_node = Tree("/")
-    fs.update_notes(
+    update_notes(
+        fs=fs,
         prefix=prefix,
         writer=writer,
         force=force,
