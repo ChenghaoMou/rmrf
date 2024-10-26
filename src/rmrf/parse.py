@@ -2,8 +2,6 @@ from tempfile import NamedTemporaryFile
 
 import fitz
 from loguru import logger
-from rich.console import Console
-from rich.logging import RichHandler
 from rmc.exporters.svg import blocks_to_svg
 from rmc.exporters.writing_tools import remarkable_palette
 from rmscene import (
@@ -14,11 +12,6 @@ from rmscene import (
 )
 
 from .fs import Node
-
-console = Console()
-logger.add(RichHandler(console=console), level="INFO")
-logger.add(RichHandler(console=console), level="ERROR")
-
 
 # def draw_handwriting_with_png(
 #     doc: fitz.Document | None,
@@ -199,18 +192,15 @@ def extract_highlights(node: Node) -> list:
                     continue
 
                 color = get_color(block)
-                # overwrite the color to match the original color
-                block.value.color.value = color
-
                 points = [p for p in block.item.value.points]
 
-                x_min = node.absolute_x(min(p.x for p in points)) / node.width
-                y_min = node.absolute_y(min(p.y for p in points)) / node.height
-                x_max = node.absolute_x(max(p.x for p in points)) / node.width
-                y_max = node.absolute_y(max(p.y for p in points)) / node.height
+                x_min = node.x_percent(min(p.x for p in points))
+                y_min = node.y_percent(min(p.y for p in points))
+                x_max = node.x_percent(max(p.x for p in points))
+                y_max = node.y_percent(max(p.y for p in points))
 
                 if doc is None or page_index is None:
-                    svg_blocks.append(block)
+                    svg_blocks.append((block, color))
                     continue
 
                 page = doc[page_index]
@@ -222,21 +212,21 @@ def extract_highlights(node: Node) -> list:
                     x_max * page_width,
                     y_max * page_height,
                 )
-                # text cut-out
+                # cut-out
                 if words := page.get_text("words", clip=rect):
                     # crop with 10 pixels margin
-                    margin = 3
-                    x_min = max(min(words, key=lambda x: x[0])[0] - margin, 0)
-                    y_min = max(min(words, key=lambda x: x[1])[1] - margin, 0)
-                    x_max = min(
-                        max(words, key=lambda x: x[2])[2] + margin,
-                        page_width,
-                    )
-                    y_max = min(
-                        max(words, key=lambda x: x[3])[3] + margin,
-                        page_height,
-                    )
-                    rect = fitz.Rect(x_min, y_min, x_max, y_max)
+                    # margin = 3
+                    # x_min = max(min(words, key=lambda x: x[0])[0] - margin, 0)
+                    # y_min = max(min(words, key=lambda x: x[1])[1] - margin, 0)
+                    # x_max = min(
+                    #     max(words, key=lambda x: x[2])[2] + margin,
+                    #     page_width,
+                    # )
+                    # y_max = min(
+                    #     max(words, key=lambda x: x[3])[3] + margin,
+                    #     page_height,
+                    # )
+                    # rect = fitz.Rect(x_min, y_min, x_max, y_max)
 
                     image = page.get_pixmap(
                         dpi=300,
@@ -256,13 +246,14 @@ def extract_highlights(node: Node) -> list:
 
                     continue
 
-                svg_blocks.append(block)
+                svg_blocks.append((block, color))
 
         if svg_blocks:
             with NamedTemporaryFile(
+                mode="w",
                 suffix=".svg", delete=False, dir=node.cache_dir
             ) as f:
-                blocks_to_svg(svg_blocks, f.name, xpos_shift=node.width / 2)
+                blocks_to_svg(svg_blocks, f, xpos_shift=node.width / 2, screen_width=node.width, screen_height=node.height)
                 highlights.append((page_index, f.name, None))
 
     return sorted(highlights, key=lambda x: x[0])

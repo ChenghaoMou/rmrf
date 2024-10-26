@@ -4,12 +4,8 @@ from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
-from rich.console import Console
-from rich.logging import RichHandler
 from rmscene import SceneGlyphItemBlock, SceneLineItemBlock
 
-console = Console()
-logger.add(RichHandler(console=console), level="INFO")
 
 @dataclass
 class Node:
@@ -37,23 +33,31 @@ class Node:
             ):
                 self.id2page[page] = i
 
+    # "customZoomCenterX": 1.1180836815342663,
+    # "customZoomCenterY": 1454.6268696760806,
+    # "customZoomOrientation": "portrait",
+    # "customZoomPageHeight": 2654,
+    # "customZoomPageWidth": 1877,
+    # "customZoomScale": 1.062249010581842,
+
     @property
     def height(self):
         if self.file_type == "notebook":
-            logger.debug(f"Using default screen height for notebook {self.id}")
+            # logger.debug(f"Using default screen height for notebook {self.id}")
             return 2160
-        return 1872 # customZoomPageHeight with default zoom scale
+        return self.metadata["customZoomPageHeight"] # customZoomPageHeight with default zoom scale
 
     @property
     def width(self):
         if self.file_type == "notebook":
-            logger.debug(f"Using default screen width for notebook {self.id}")
+            # logger.debug(f"Using default screen width for notebook {self.id}")
             return 1620
-        return 1404 # customZoomPageWidth with default zoom scale
+        return self.metadata["customZoomPageWidth"] # customZoomPageWidth with default zoom scale
+    
 
     @property
     def zoom_scale(self):
-        return 1 # customZoomScale default
+        return self.metadata["customZoomScale"] # customZoomScale default
 
     @property
     def margin(self):
@@ -61,17 +65,23 @@ class Node:
 
     @property
     def center_x(self):
-        return 0 # customZoomCenterX default
+        return self.metadata["customZoomCenterX"] # customZoomCenterX default
 
     @property
     def center_y(self):
-        return self.height / 2 # customZoomCenterY default
+        return self.metadata["customZoomCenterY"] # customZoomCenterY default
 
     def absolute_x(self, relative_x: int):
         return relative_x + self.width / 2
 
     def absolute_y(self, relative_y: int):
         return relative_y
+    
+    def x_percent(self, relative_x: int):
+        return self.absolute_x(relative_x) / self.width
+
+    def y_percent(self, relative_y: int):
+        return self.absolute_y(relative_y) / self.height
 
     @property
     def created_time(self):

@@ -106,11 +106,20 @@ wheels = [
 [[package]]
 name = "rmc"
 version = "0.1.1"
-source = { git = "https://github.com/ChenghaoMou/rmc.git#2bdc753d9362e425beee91d554c1530d33485898" }
+source = { editable = "../rmc" }
 dependencies = [
     { name = "click" },
     { name = "rmscene" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.7" },
+    { name = "rmscene", editable = "../rmscene" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.3.3" }]
 
 [[package]]
 name = "rmrf"
@@ -127,19 +136,22 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "loguru", specifier = ">=0.7.2" },
-    { name = "pymupdf" },
+    { name = "pymupdf", specifier = ">=1.24.12" },
     { name = "rich", specifier = ">=13.9.3" },
-    { name = "rmc", git = "https://github.com/ChenghaoMou/rmc.git" },
-    { name = "rmscene", git = "https://github.com/ChenghaoMou/rmscene.git" },
+    { name = "rmc", editable = "../rmc" },
+    { name = "rmscene", editable = "../rmscene" },
 ]
 
 [[package]]
 name = "rmscene"
 version = "0.5.0"
-source = { git = "https://github.com/ChenghaoMou/rmscene.git#17e98a59c5295f6657dcca54cae2160fca013a32" }
+source = { editable = "../rmscene" }
 dependencies = [
     { name = "packaging" },
 ]
+
+[package.metadata]
+requires-dist = [{ name = "packaging", specifier = ">=23.0,<24.0" }]
 
 [[package]]
 name = "typing-extensions"
