@@ -182,7 +182,7 @@ def extract_highlights(node: Node) -> list:
 
                 # If this is a highlight block, we don't need to draw it
                 if node.is_highlight_block(block):
-                    color = node.get_color(block)
+                    color = get_color(block)
                     highlights.append(
                         (
                             page_index or -1,
