@@ -1,10 +1,13 @@
+import math
 from tempfile import NamedTemporaryFile
 
 import fitz
 from loguru import logger
+from rich.console import Console
 from rmc.exporters.svg import blocks_to_svg
 from rmc.exporters.writing_tools import remarkable_palette
 from rmscene import (
+    RootTextBlock,
     SceneGlyphItemBlock,
     SceneLineItemBlock,
     UnreadableBlock,
@@ -12,6 +15,8 @@ from rmscene import (
 )
 
 from .fs import Node
+
+console = Console()
 
 # def draw_handwriting_with_png(
 #     doc: fitz.Document | None,
@@ -165,9 +170,18 @@ def extract_highlights(node: Node) -> list:
         with open(rm_file, "rb") as f:
             blocks = read_blocks(f)
             for block_idx, block in enumerate(blocks):
-                if not isinstance(block, (SceneLineItemBlock, SceneGlyphItemBlock)):
+                if not isinstance(
+                    block, (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
+                ):
                     if isinstance(block, UnreadableBlock):
                         logger.error(f"[red]{block}[/red]")
+                    continue
+
+                if isinstance(block, RootTextBlock):
+                    svg_blocks.append((block, (0, 0, 0, 255)))
+                    continue
+
+                if isinstance(block, SceneLineItemBlock) and block.item.value is None:
                     continue
 
                 if block.item.deleted_length > 0:
@@ -215,7 +229,6 @@ def extract_highlights(node: Node) -> list:
                 )
                 # cut-out
                 if words := page.get_text("words", clip=rect):
-                    
                     # snaps to words crop with 10 pixels margin
                     # margin = 3
                     # x_min = max(min(words, key=lambda x: x[0])[0] - margin, 0)
@@ -253,15 +266,65 @@ def extract_highlights(node: Node) -> list:
 
         if svg_blocks:
             with NamedTemporaryFile(
-                mode="w",
-                suffix=".svg", delete=False, dir=node.cache_dir
+                mode="w", suffix=".svg", delete=False, dir=node.cache_dir
             ) as f:
-                blocks_to_svg(svg_blocks, f, xpos_shift=node.width / 2, screen_width=node.width, screen_height=node.height)
-                highlights.append((
-                    page_index,
-                    node.page_tags.get(page_index, set()),
-                    f.name,
-                    None,
-                ))
+                y_min = 0
+                x_min = 0
+                y_max = 0
+                x_max = 0
+                x_values = []
+                y_values = []
+
+                for block, _ in svg_blocks:
+                    if isinstance(block, SceneLineItemBlock):
+                        x_values.extend(p.x for p in block.item.value.points)
+                        y_values.extend(p.y for p in block.item.value.points)
+                    elif isinstance(block, RootTextBlock):
+                        console.print(f"[yellow]{block}[/yellow]")
+                        x_values.append(block.value.pos_x)
+                        y_values.append(block.value.pos_y)
+
+                x_min = min(x_values)
+                y_min = min(y_values)
+                x_max = max(x_values)
+                y_max = max(y_values)
+
+                screen_width = node.width
+                screen_height = node.height
+                
+                x_delta = node.width / 2
+                y_delta = abs(y_min) if y_min < 0 else 0
+                
+                if x_max - x_min > node.width or x_max + x_delta > screen_width:
+                    screen_width = math.ceil(x_max - x_min)
+                    x_delta = abs(x_min)
+                
+                if y_max - y_min > node.height or y_max + y_delta > node.height or y_max > node.height:
+                    y_delta = abs(y_min) if y_min < 0 else 0
+                    screen_height = max(math.ceil(y_max - y_min), node.height, y_max + y_delta)
+
+                logger.debug(f"screen_width: {screen_width}, screen_height: {screen_height}")
+                logger.debug(f"x_delta: {x_delta}, y_delta: {y_delta}")
+                logger.debug(f"x_min: {x_min} -> {x_min + x_delta}, y_min: {y_min} -> {y_min + y_delta}")
+                logger.debug(f"x_max: {x_max} -> {x_max + x_delta}, y_max: {y_max} -> {y_max + y_delta}")
+               
+                margin = 100
+
+                blocks_to_svg(
+                    svg_blocks,
+                    f,
+                    xpos_shift=math.ceil(x_delta) + margin,
+                    ypos_shift=math.ceil(y_delta) + margin,
+                    screen_width=screen_width + margin * 2,
+                    screen_height=screen_height + margin * 2,
+                )
+                highlights.append(
+                    (
+                        page_index,
+                        node.page_tags.get(page_index, set()),
+                        f.name,
+                        None,
+                    )
+                )
 
     return sorted(highlights, key=lambda x: x[0])

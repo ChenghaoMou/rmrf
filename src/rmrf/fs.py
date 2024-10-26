@@ -17,6 +17,7 @@ class Node:
     date_format: str = "%Y-%m-%d %H:%M:%S:%f"
     id2page: dict[str, int] = field(default_factory=dict)
     page_tags: dict[int, set[str]] = field(default_factory=dict)
+    page_scroll: dict[int, int] = field(default_factory=dict)
     children: list["Node"] = field(default_factory=list)
 
     def __post_init__(self):
@@ -26,9 +27,13 @@ class Node:
         
 
     def read_page_map(self):
+        
+        self.page_scroll = defaultdict(int)
         if "cPages" in self.metadata and "pages" in self.metadata["cPages"]:
             for i, page in enumerate(self.metadata["cPages"]["pages"]):
                 self.id2page[page["id"]] = i
+                if "verticalScroll" in page:
+                    self.page_scroll[i] = page["verticalScroll"]["value"]
 
         if "pages" in self.metadata:
             for page, i in zip(
@@ -51,19 +56,21 @@ class Node:
 
     @property
     def height(self):
-        if self.file_type == "notebook":
+        if self.file_type in ["notebook", "DocumentType"]:
             # logger.debug(f"Using default screen height for notebook {self.id}")
             return 2160
         return self.metadata["customZoomPageHeight"] # customZoomPageHeight with default zoom scale
 
     @property
     def width(self):
-        if self.file_type == "notebook":
+        if self.file_type in ["notebook", "DocumentType"]:
             # logger.debug(f"Using default screen width for notebook {self.id}")
             return 1620
         return self.metadata["customZoomPageWidth"] # customZoomPageWidth with default zoom scale
     
-
+    def page_height(self, page_idx: int):
+        return self.height + self.page_scroll[page_idx]
+    
     @property
     def zoom_scale(self):
         return self.metadata["customZoomScale"] # customZoomScale default
