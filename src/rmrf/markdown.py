@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.tree import Tree
 
 from .fs import FileSystem, Node
+from .parse import extract_highlights
 
 console = Console()
 
@@ -72,7 +73,7 @@ class MarkdownWriter:
                     ):
                         return False, last_modified, None
 
-        highlights = node.highlights
+        highlights = extract_highlights(node)
         highlight_text = []
         static_dir = self.static_dir / name
 
