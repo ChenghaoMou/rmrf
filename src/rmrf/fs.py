@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -15,12 +16,14 @@ class Node:
     cache_dir: Path | str
     date_format: str = "%Y-%m-%d %H:%M:%S:%f"
     id2page: dict[str, int] = field(default_factory=dict)
+    page_tags: dict[int, set[str]] = field(default_factory=dict)
     children: list["Node"] = field(default_factory=list)
 
     def __post_init__(self):
         self.read_page_map()
         self.source_dir = Path(self.source_dir)
         self.cache_dir = Path(self.cache_dir)
+        
 
     def read_page_map(self):
         if "cPages" in self.metadata and "pages" in self.metadata["cPages"]:
@@ -32,6 +35,12 @@ class Node:
                 self.metadata["pages"], self.metadata["redirectionPageMap"]
             ):
                 self.id2page[page] = i
+        
+        self.page_tags = defaultdict(set)
+        if "pageTags" in self.metadata:
+            for item in self.metadata["pageTags"]:
+                page_idx = self.id2page[item["pageId"]]
+                self.page_tags[page_idx].add(item["name"])
 
     # "customZoomCenterX": 1.1180836815342663,
     # "customZoomCenterY": 1454.6268696760806,

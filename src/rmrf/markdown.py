@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from datetime import datetime
+from itertools import groupby
 from pathlib import Path
 from typing import Callable
 
@@ -32,9 +33,16 @@ tags:
 """
 
 Highlight_Template = """
-<mark style="background-color: rgb({r:02x}{g:02x}{b:02x});">{text}</mark> (page {page_index})
+<mark style="background-color: rgb({r:02x}{g:02x}{b:02x});">{text}</mark>
 """
 
+Page_Template = """
+## Page {page_index}
+
+{tags}
+
+{highlights}
+"""
 
 class MarkdownWriter:
     def __init__(
@@ -85,28 +93,47 @@ class MarkdownWriter:
         if os.path.exists(f"{self.target_dir}/{name}.md"):
             os.remove(f"{self.target_dir}/{name}.md")
 
-        for page_index, text_or_path, color in highlights:
-            if color is None:
-                os.makedirs(static_dir, exist_ok=True)
-                shutil.copy(
-                    text_or_path,
-                    os.path.join(static_dir, os.path.basename(text_or_path)),
-                )
-                highlight_text.append(
-                    f"![Image (page {page_index})](statics/{os.path.join(name, os.path.basename(text_or_path))})"
-                )
-                # remove the image file
-                os.remove(text_or_path)
-            else:
-                highlight_text.append(
-                    Highlight_Template.format(
-                        text=text_or_path,
-                        r=color[0],
-                        g=color[1],
-                        b=color[2],
-                        page_index=page_index,
+        for page_index, group in groupby(
+            sorted(highlights, key=lambda x: x[0]),
+            key=lambda x: x[0],
+        ):
+            page_highlights = []
+
+            for _, tags, text_or_path, color in group:
+                if color is None:
+                    os.makedirs(static_dir, exist_ok=True)
+                    shutil.copy(
+                        text_or_path,
+                        os.path.join(static_dir, os.path.basename(text_or_path)),
                     )
+                    page_highlights.append(
+                        f"![Image (page {page_index})](statics/{os.path.join(name, os.path.basename(text_or_path))})"
+                    )
+                    # remove the image file
+                    os.remove(text_or_path)
+                else:
+                    page_highlights.append(
+                        Highlight_Template.format(
+                            text=text_or_path,
+                            r=color[0],
+                            g=color[1],
+                            b=color[2],
+                            page_index=page_index,
+                        )
+                    )
+
+            if tags:
+                tag_content = "tags: " + ", ".join(f"#{tag.replace(' ', '_')}" for tag in tags)
+            else:
+                tag_content = ""
+
+            highlight_text.append(
+                Page_Template.format(
+                    page_index=page_index,
+                    tags=tag_content,
+                    highlights="\n".join(page_highlights),
                 )
+            )
 
         try:
             original_title = self.title_getter(node.name)

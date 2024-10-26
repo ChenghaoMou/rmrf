@@ -152,7 +152,7 @@ def extract_highlights(node: Node) -> list:
             doc = None
     else:
         doc = None
-        if node.file_type == "notebook":
+        if node.file_type in {"notebook", "DocumentType"}:
             page_width = node.width
             page_height = node.height
 
@@ -179,6 +179,7 @@ def extract_highlights(node: Node) -> list:
                     highlights.append(
                         (
                             page_index or -1,
+                            node.page_tags.get(page_index, set()),
                             block.item.value.text,
                             color,
                         )
@@ -214,7 +215,8 @@ def extract_highlights(node: Node) -> list:
                 )
                 # cut-out
                 if words := page.get_text("words", clip=rect):
-                    # crop with 10 pixels margin
+                    
+                    # snaps to words crop with 10 pixels margin
                     # margin = 3
                     # x_min = max(min(words, key=lambda x: x[0])[0] - margin, 0)
                     # y_min = max(min(words, key=lambda x: x[1])[1] - margin, 0)
@@ -239,6 +241,7 @@ def extract_highlights(node: Node) -> list:
                         highlights.append(
                             (
                                 page_index,
+                                node.page_tags.get(page_index, set()),
                                 f.name,
                                 None,
                             )
@@ -254,6 +257,11 @@ def extract_highlights(node: Node) -> list:
                 suffix=".svg", delete=False, dir=node.cache_dir
             ) as f:
                 blocks_to_svg(svg_blocks, f, xpos_shift=node.width / 2, screen_width=node.width, screen_height=node.height)
-                highlights.append((page_index, f.name, None))
+                highlights.append((
+                    page_index,
+                    node.page_tags.get(page_index, set()),
+                    f.name,
+                    None,
+                ))
 
     return sorted(highlights, key=lambda x: x[0])
