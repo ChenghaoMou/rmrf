@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Callable
 
 from rich.console import Console
+from rich.tree import Tree
 
-from .fs import Node
+from .fs import FileSystem, Node
 
 console = Console()
 
@@ -149,3 +150,51 @@ def book_title_getter(x: str) -> str:
     return x.replace(".pdf", "").replace(".rm", "").replace(".epub", "").split(" - ")[0]
 
 
+def update(fs: FileSystem, *, prefix, writer: MarkdownWriter, force=False):
+    tree_node = Tree("/")
+    fs.update_notes(
+        prefix=prefix,
+        writer=writer,
+        force=force,
+        node=fs.root,
+        tree_node=tree_node,
+        path="/Root",
+    )
+
+    console.print(tree_node)
+
+
+def update_notes(
+    fs: FileSystem,
+    *,
+    prefix,
+    writer: MarkdownWriter,
+    node,
+    tree_node,
+    path="",
+    force=False,
+):
+    if path.startswith(prefix):
+        updated, prev_last_modified, new_last_modified = writer.update(
+            node, force=force
+        )
+        if updated and prev_last_modified != new_last_modified:
+            branch = tree_node.add(f"{node.name} [green]✓[/green]")
+        else:
+            branch = tree_node.add(f"{node.name} [yellow]〰[/yellow]")
+    else:
+        branch = tree_node.add(f"{node.name} [red]✗[/red]")
+
+    if not path.startswith(prefix) and not prefix.startswith(path):
+        return
+
+    for child in node.children:
+        update_notes(
+            fs=fs,
+            prefix=prefix,
+            writer=writer,
+            node=child,
+            tree_node=branch,
+            path=path + "/" + child.name,
+            force=force,
+        )

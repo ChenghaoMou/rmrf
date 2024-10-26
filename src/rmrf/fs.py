@@ -6,10 +6,7 @@ from pathlib import Path
 from loguru import logger
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.tree import Tree
 from rmscene import SceneGlyphItemBlock, SceneLineItemBlock
-
-from .parse import MarkdownWriter
 
 console = Console()
 logger.add(RichHandler(console=console), level="INFO")
@@ -166,53 +163,6 @@ class FileSystem:
             else:
                 self.root.children.append(node)
 
-    def update(self, *, prefix, writer: MarkdownWriter, force=False):
-        tree_node = Tree("/")
-        self.update_notes(
-            prefix=prefix,
-            writer=writer,
-            force=force,
-            node=self.root,
-            tree_node=tree_node,
-            path="/Root",
-        )
-
-        console.print(tree_node)
-
-    def update_notes(
-        self,
-        *,
-        prefix,
-        writer: MarkdownWriter,
-        node,
-        tree_node,
-        path="",
-        force=False,
-    ):
-        if path.startswith(prefix):
-            updated, prev_last_modified, new_last_modified = writer.update(
-                node, force=force
-            )
-            if updated and prev_last_modified != new_last_modified:
-                branch = tree_node.add(f"{node.name} [green]✓[/green]")
-            else:
-                branch = tree_node.add(f"{node.name} [yellow]〰[/yellow]")
-        else:
-            branch = tree_node.add(f"{node.name} [red]✗[/red]")
-
-        if not path.startswith(prefix) and not prefix.startswith(path):
-            return
-
-        for child in node.children:
-            self.update_notes(
-                prefix=prefix,
-                writer=writer,
-                node=child,
-                tree_node=branch,
-                path=path + "/" + child.name,
-                force=force,
-            )
-    
     def get_metadata(self, file_id: str) -> dict:
         path = self.source_dir / f"{file_id}.metadata"
         if not path.exists():
