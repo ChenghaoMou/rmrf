@@ -101,9 +101,9 @@ class MarkdownWriter:
                 highlight_text.append(
                     Highlight_Template.format(
                         text=text_or_path,
-                        r=color.r,
-                        g=color.g,
-                        b=color.b,
+                        r=color[0],
+                        g=color[1],
+                        b=color[2],
                         page_index=page_index,
                     )
                 )
