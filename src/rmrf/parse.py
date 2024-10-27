@@ -40,6 +40,7 @@ def get_limits(
             x_values.extend(p.x for p in block.item.value.points)
             y_values.extend(p.y for p in block.item.value.points)
         elif isinstance(block, RootTextBlock):
+            console.print(block)
             x_values.append(block.value.pos_x)
             y_values.append(block.value.pos_y)
 

@@ -50,6 +50,7 @@ class SvgDocInfo:
     xpos_delta: float
     ypos_delta: float
 
+
 def blocks_to_svg(
     blocks: Iterable[tuple[Block, tuple[int, int, int, int]]],
     output: StringIO,
@@ -118,7 +119,7 @@ def draw_stroke(
     last_xpos = -1.0
     last_ypos = -1.0
     last_segment_width = 0
-    
+
     for point_id, point in enumerate(block.item.value.points):
         xpos = point.x + svg_doc_info.xpos_delta
         ypos = point.y + svg_doc_info.ypos_delta
@@ -151,7 +152,7 @@ def draw_stroke(
             output_text += 'points="'
             if last_xpos != -1.0:
                 output_text += f"{last_xpos:.3f},{last_ypos:.3f} "
-        
+
         last_xpos = xpos
         last_ypos = ypos
         last_segment_width = segment_width
@@ -190,26 +191,59 @@ def draw_text(block: RootTextBlock, svg_doc_info: SvgDocInfo) -> str:
 }
 </style>"""
 
-    style_class = "plain"
-    if block.value.styles:
-        value = list(block.value.styles.values())[0].value
-        style_class = ParagraphStyle(value).name
-
     content = ""
     xpos = block.value.pos_x + svg_doc_info.xpos_delta
     ypos = block.value.pos_y + svg_doc_info.ypos_delta
 
+    newlines = 0
+    print(block.value.styles)
     for text_item in block.value.items.sequence_items():
-        content += text_item.value
+        print(text_item.item_id, block.value.styles.get(text_item.item_id))
+        self_style = block.value.styles.get(text_item.item_id, None)
+        left_style = block.value.styles.get(text_item.left_id, None)
+        style_class = "plain"
+        if self_style is not None:
+            style_class = ParagraphStyle(self_style.value).name.lower()
 
-    offset = 0.5 * content.count("\n")
-    content = content.replace("\n", "")
-    content = f"<tspan x='{xpos}' dy='{offset}em'>{content}</tspan>"
+        margin = 0
+        if left_style is not None and left_style.value in [
+            ParagraphStyle.BULLET,
+            ParagraphStyle.BULLET2,
+            ParagraphStyle.CHECKBOX,
+            ParagraphStyle.CHECKBOX_CHECKED,
+        ]:
+            symbol = {
+                ParagraphStyle.BULLET: "•",
+                ParagraphStyle.BULLET2: "•",
+                ParagraphStyle.CHECKBOX: "☐",
+                ParagraphStyle.CHECKBOX_CHECKED: "☑",
+            }[left_style.value]
+            content += f"<tspan x='{xpos}' dy='{newlines/2}em' class='{style_class}'>{symbol}</tspan>"
+            margin = 50
+
+        started = False
+
+        for part in text_item.value.split("\n"):
+            if started:
+                newlines += 1
+            if not part:
+                continue
+
+            if margin:
+                dy = 0
+            else:
+                dy = newlines / 2
+
+            if not started:
+                started = True
+                content += f"<tspan x='{xpos + margin}' dy='{dy}em' class='{style_class}'>{part}</tspan>"
+            else:
+                newlines += 1
+                content += f"<tspan x='{xpos + margin}' dy='{dy}em' class='{style_class}'>{part}</tspan>"
+
     output_text += f"<!-- RootTextBlock item_id: {block.block_id} -->"
     if content:
-        output_text += (
-            f"""<text x="{xpos}" y="{ypos}" class="{style_class.lower()}">{content}</text>"""
-        )
+        output_text += f"""<text x="{xpos}" y="{ypos}">{content}</text>"""
 
     return output_text
 
@@ -225,7 +259,7 @@ def get_limits(blocks: Iterable[Block]) -> tuple[float, float, float, float]:
 
         if block.item.value is None:
             continue
-        
+
         for point in block.item.value.points:
             xpos = point.x
             ypos = point.y
@@ -233,7 +267,7 @@ def get_limits(blocks: Iterable[Block]) -> tuple[float, float, float, float]:
             xmax = max(xmax, xpos)
             ymin = min(ymin, ypos)
             ymax = max(ymax, ypos)
-    
+
     return xmin, xmax, ymin, ymax
 
 
@@ -255,9 +289,9 @@ def get_dimensions(
     xmin, xmax, ymin, ymax = get_limits(blocks)
     logger.debug(f"xmin: {xmin} xmax: {xmax} ymin: {ymin} ymax: {ymax}")
 
-    #* {xpos,ypos} coordinates are based on the top-center point
-    #* of the doc **iff there are no text boxes**. When you add
-    #* text boxes, the xpos/ypos values change.
+    # * {xpos,ypos} coordinates are based on the top-center point
+    # * of the doc **iff there are no text boxes**. When you add
+    # * text boxes, the xpos/ypos values change.
     xpos_delta = xpos_shift
     ypos_delta = ypos_shift
     # adjust dimensions if needed
@@ -280,7 +314,7 @@ def get_dimensions(
     logger.debug(
         f"height: {height} width: {width} xpos_delta: {xpos_delta} ypos_delta: {ypos_delta}"
     )
-    
+
     return SvgDocInfo(
         height=height, width=width, xpos_delta=xpos_delta, ypos_delta=ypos_delta
     )
