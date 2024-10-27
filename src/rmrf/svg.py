@@ -196,9 +196,7 @@ def draw_text(block: RootTextBlock, svg_doc_info: SvgDocInfo) -> str:
     ypos = block.value.pos_y + svg_doc_info.ypos_delta
 
     newlines = 0
-    print(block.value.styles)
     for text_item in block.value.items.sequence_items():
-        print(text_item.item_id, block.value.styles.get(text_item.item_id))
         self_style = block.value.styles.get(text_item.item_id, None)
         left_style = block.value.styles.get(text_item.left_id, None)
         style_class = "plain"
