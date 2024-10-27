@@ -2,18 +2,6 @@ version = 1
 requires-python = ">=3.10"
 
 [[package]]
-name = "click"
-version = "8.1.7"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "colorama", marker = "platform_system == 'Windows'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/96/d3/f04c7bfcf5c1862a2a5b845c6b2b360488cf47af55dfa79c98f6a6bf98b5/click-8.1.7.tar.gz", hash = "sha256:ca9853ad459e787e2192211578cc907e7594e294c7ccc834310722b41b9ca6de", size = 336121 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl", hash = "sha256:ae74fb96c20a0277a1d615f1e4d73c8414f5a98db8b799a7931d1582f3390c28", size = 97941 },
-]
-
-[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -104,24 +92,6 @@ wheels = [
 ]
 
 [[package]]
-name = "rmc"
-version = "0.1.1"
-source = { editable = "../rmc" }
-dependencies = [
-    { name = "click" },
-    { name = "rmscene" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.1.7" },
-    { name = "rmscene", editable = "../rmscene" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.3.3" }]
-
-[[package]]
 name = "rmrf"
 version = "0.1.0"
 source = { editable = "." }
@@ -129,7 +99,6 @@ dependencies = [
     { name = "loguru" },
     { name = "pymupdf" },
     { name = "rich" },
-    { name = "rmc" },
     { name = "rmscene" },
 ]
 
@@ -138,7 +107,6 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.2" },
     { name = "pymupdf", specifier = ">=1.24.12" },
     { name = "rich", specifier = ">=13.9.3" },
-    { name = "rmc", editable = "../rmc" },
     { name = "rmscene", editable = "../rmscene" },
 ]
 

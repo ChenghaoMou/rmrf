@@ -8,7 +8,6 @@ dependencies = [
     "loguru>=0.7.2",
     "rich>=13.9.3",
     "pymupdf>=1.24.12",
-    "rmc",
     "rmscene",
 ]
 
@@ -17,5 +16,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-rmc = { path = "../rmc", editable = true }
 rmscene = { path = "../rmscene", editable = true }

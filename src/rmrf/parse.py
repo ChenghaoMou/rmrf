@@ -4,8 +4,6 @@ from tempfile import NamedTemporaryFile
 import fitz
 from loguru import logger
 from rich.console import Console
-from rmc.exporters.svg import blocks_to_svg
-from rmc.exporters.writing_tools import remarkable_palette
 from rmscene import (
     RootTextBlock,
     SceneGlyphItemBlock,
@@ -15,119 +13,10 @@ from rmscene import (
 )
 
 from .fs import Node
+from .svg import blocks_to_svg
+from .writing_tools import remarkable_palette
 
 console = Console()
-
-# def draw_handwriting_with_png(
-#     doc: fitz.Document | None,
-#     page_index: int,
-#     hand_writing_points: list[Point],
-#     page_width: float,
-#     page_height: float,
-#     cache_dir: str,
-# ):
-#     if doc:
-#         page = doc[page_index]
-#         page_image = page.get_pixmap(dpi=300)
-#         uuid = uuid4()
-#         page_image.save(f"{cache_dir}/{uuid}-{page_index}.png")
-#         image = Image.open(f"{cache_dir}/{uuid}-{page_index}.png")
-#         image = image.convert("RGBA")
-#     else:
-#         image = Image.new("RGBA", (page_width, page_height), (255, 255, 255, 255))
-
-#     for group, segments in groupby(
-#         [x for x in hand_writing_points if x.page_index == page_index],
-#         key=lambda x: (
-#             x.page_index,
-#             x.block_index,
-#             x.tool,
-#             x.color,
-#             x.thickness_scale,
-#         ),
-#     ):
-#         color = group[3]
-#         prev_x, prev_y = None, None
-#         overlay = Image.new("RGBA", (page_width, page_height), (255, 255, 255, 0))
-#         draw = ImageDraw.Draw(overlay)
-#         for segment in segments:
-#             x, y, speed, direction, width, pressure, thickness_scale = (
-#                 segment.x,
-#                 segment.y,
-#                 segment.speed,
-#                 segment.direction,
-#                 segment.width,
-#                 segment.pressure,
-#                 segment.thickness_scale,
-#             )
-#             if prev_x and prev_y:
-#                 draw.line(
-#                     [(prev_x, prev_y), (x, y)],
-#                     fill=color.as_tuple(),
-#                     width=math.ceil(thickness_scale),
-#                 )
-
-#             prev_x, prev_y = x, y
-
-#         image.alpha_composite(overlay)
-
-#     with NamedTemporaryFile(suffix=".png", delete=False, dir=cache_dir) as f:
-#         image.save(f.name)
-#         return f.name
-
-
-# def draw_handwriting_with_svg(
-#     doc: fitz.Document | None,
-#     page_index: int,
-#     hand_writing_points: list[Point],
-#     page_width: float,
-#     page_height: float,
-#     cache_dir: str,
-# ):
-#     svg_content = f'<svg xmlns="http://www.w3.org/2000/svg" width="{page_width}" height="{page_height}">\n'
-
-#     if doc:
-#         # If we have a PDF document, add it as a background image
-#         page = doc[page_index]
-#         pix = page.get_pixmap()
-#         img_data = pix.tobytes("png")
-#         img_b64 = base64.b64encode(img_data).decode()
-#         svg_content += (
-#             f'  <image x="0" y="0" width="{page_width}" height="{page_height}" '
-#         )
-#         svg_content += f'xlink:href="data:image/png;base64,{img_b64}" />\n'
-
-#     for group, segments in groupby(
-#         hand_writing_points,
-#         key=lambda x: (x.page_index, x.block_index, x.tool, x.color, x.thickness_scale),
-#     ):
-#         color = group[3]
-#         thickness_scale = group[4]
-#         points = list(segments)
-
-#         if not points:
-#             continue
-
-#         path_data = "M "
-
-#         for i, point in enumerate(points):
-#             x, y = int(point.x), int(point.y)
-
-#             if i == 0:
-#                 path_data += f"{x:.2f},{y:.2f} "
-#             else:
-#                 path_data += f"L {x:.2f},{y:.2f} "
-
-#         svg_content += f'  <path d="{path_data}" fill="none" '
-#         svg_content += f'stroke="{color}" '
-#         svg_content += f'stroke-width="{max(thickness_scale * color.size / 10, 1)}" '
-#         svg_content += 'stroke-linecap="round" stroke-linejoin="round" />\n'
-
-#     svg_content += "</svg>"
-
-#     with NamedTemporaryFile(suffix=".svg", delete=False, dir=cache_dir) as f:
-#         f.write(svg_content.encode("utf-8"))
-#         return f.name
 
 
 def get_color(
@@ -139,6 +28,22 @@ def get_color(
 
     r, g, b = remarkable_palette[block.item.value.color]
     return (r, g, b, 255)
+
+
+def get_limits(
+    blocks: list[SceneLineItemBlock | SceneGlyphItemBlock | RootTextBlock],
+) -> tuple[int, int, int, int]:
+    x_values = []
+    y_values = []
+    for block in blocks:
+        if isinstance(block, SceneLineItemBlock):
+            x_values.extend(p.x for p in block.item.value.points)
+            y_values.extend(p.y for p in block.item.value.points)
+        elif isinstance(block, RootTextBlock):
+            x_values.append(block.value.pos_x)
+            y_values.append(block.value.pos_y)
+
+    return (min(x_values), min(y_values), max(x_values), max(y_values))
 
 
 def extract_highlights(node: Node) -> list:
@@ -203,7 +108,6 @@ def extract_highlights(node: Node) -> list:
 
                 # If this is not a handwriting block, we don't need to draw it
                 if not node.is_handwriting_block(block):
-                    # console.print(f"[yellow]{block}[/yellow]")
                     continue
 
                 color = get_color(block)
@@ -268,46 +172,48 @@ def extract_highlights(node: Node) -> list:
             with NamedTemporaryFile(
                 mode="w", suffix=".svg", delete=False, dir=node.cache_dir
             ) as f:
-                y_min = 0
-                x_min = 0
-                y_max = 0
-                x_max = 0
-                x_values = []
-                y_values = []
-
-                for block, _ in svg_blocks:
-                    if isinstance(block, SceneLineItemBlock):
-                        x_values.extend(p.x for p in block.item.value.points)
-                        y_values.extend(p.y for p in block.item.value.points)
-                    elif isinstance(block, RootTextBlock):
-                        console.print(f"[yellow]{block}[/yellow]")
-                        x_values.append(block.value.pos_x)
-                        y_values.append(block.value.pos_y)
-
-                x_min = min(x_values)
-                y_min = min(y_values)
-                x_max = max(x_values)
-                y_max = max(y_values)
+                x_min, y_min, x_max, y_max = get_limits([b for b, _ in svg_blocks])
 
                 screen_width = node.width
                 screen_height = node.height
-                
+
                 x_delta = node.width / 2
                 y_delta = abs(y_min) if y_min < 0 else 0
-                
-                if x_max - x_min > node.width or x_max + x_delta > screen_width:
-                    screen_width = math.ceil(x_max - x_min)
-                    x_delta = abs(x_min)
-                
-                if y_max - y_min > node.height or y_max + y_delta > node.height or y_max > node.height:
-                    y_delta = abs(y_min) if y_min < 0 else 0
-                    screen_height = max(math.ceil(y_max - y_min), node.height, y_max + y_delta)
 
-                logger.debug(f"screen_width: {screen_width}, screen_height: {screen_height}")
+                if (
+                    x_max - x_min > screen_width
+                    or x_max + x_delta > screen_width
+                    or x_max > screen_width
+                ):
+                    x_delta = abs(x_min) if x_min < 0 else 0
+                    screen_width = max(
+                        math.ceil(x_max - x_min), screen_width, x_max + x_delta
+                    )
+
+                if (
+                    y_max - y_min > screen_height
+                    or y_max + y_delta > screen_height
+                    or y_max > screen_height
+                ):
+                    y_delta = abs(y_min) if y_min < 0 else 0
+                    screen_height = max(
+                        math.ceil(y_max - y_min), screen_height, y_max + y_delta
+                    )
+
+                x_delta = math.ceil(x_delta)
+                y_delta = math.ceil(y_delta)
+
+                logger.debug(
+                    f"screen_width: {screen_width}, screen_height: {screen_height}"
+                )
                 logger.debug(f"x_delta: {x_delta}, y_delta: {y_delta}")
-                logger.debug(f"x_min: {x_min} -> {x_min + x_delta}, y_min: {y_min} -> {y_min + y_delta}")
-                logger.debug(f"x_max: {x_max} -> {x_max + x_delta}, y_max: {y_max} -> {y_max + y_delta}")
-               
+                logger.debug(
+                    f"x_min: {x_min:.2f} -> {x_min + x_delta:.2f}, y_min: {y_min:.2f} -> {y_min + y_delta:.2f}"
+                )
+                logger.debug(
+                    f"x_max: {x_max:.2f} -> {x_max + x_delta:.2f}, y_max: {y_max:.2f} -> {y_max + y_delta:.2f}"
+                )
+
                 margin = 100
 
                 blocks_to_svg(
@@ -318,6 +224,7 @@ def extract_highlights(node: Node) -> list:
                     screen_width=screen_width + margin * 2,
                     screen_height=screen_height + margin * 2,
                 )
+
                 highlights.append(
                     (
                         page_index,

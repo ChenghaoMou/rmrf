@@ -24,10 +24,8 @@ class Node:
         self.read_page_map()
         self.source_dir = Path(self.source_dir)
         self.cache_dir = Path(self.cache_dir)
-        
 
     def read_page_map(self):
-        
         self.page_scroll = defaultdict(int)
         if "cPages" in self.metadata and "pages" in self.metadata["cPages"]:
             for i, page in enumerate(self.metadata["cPages"]["pages"]):
@@ -40,7 +38,7 @@ class Node:
                 self.metadata["pages"], self.metadata["redirectionPageMap"]
             ):
                 self.id2page[page] = i
-        
+
         self.page_tags = defaultdict(set)
         if "pageTags" in self.metadata:
             for item in self.metadata["pageTags"]:
@@ -59,21 +57,25 @@ class Node:
         if self.file_type in ["notebook", "DocumentType"]:
             # logger.debug(f"Using default screen height for notebook {self.id}")
             return 2160
-        return self.metadata["customZoomPageHeight"] # customZoomPageHeight with default zoom scale
+        return self.metadata[
+            "customZoomPageHeight"
+        ]  # customZoomPageHeight with default zoom scale
 
     @property
     def width(self):
         if self.file_type in ["notebook", "DocumentType"]:
             # logger.debug(f"Using default screen width for notebook {self.id}")
             return 1620
-        return self.metadata["customZoomPageWidth"] # customZoomPageWidth with default zoom scale
-    
+        return self.metadata[
+            "customZoomPageWidth"
+        ]  # customZoomPageWidth with default zoom scale
+
     def page_height(self, page_idx: int):
         return self.height + self.page_scroll[page_idx]
-    
+
     @property
     def zoom_scale(self):
-        return self.metadata["customZoomScale"] # customZoomScale default
+        return self.metadata["customZoomScale"]  # customZoomScale default
 
     @property
     def margin(self):
@@ -81,18 +83,18 @@ class Node:
 
     @property
     def center_x(self):
-        return self.metadata["customZoomCenterX"] # customZoomCenterX default
+        return self.metadata["customZoomCenterX"]  # customZoomCenterX default
 
     @property
     def center_y(self):
-        return self.metadata["customZoomCenterY"] # customZoomCenterY default
+        return self.metadata["customZoomCenterY"]  # customZoomCenterY default
 
     def absolute_x(self, relative_x: int):
         return relative_x + self.width / 2
 
     def absolute_y(self, relative_y: int):
         return relative_y
-    
+
     def x_percent(self, relative_x: int):
         return self.absolute_x(relative_x) / self.width
 
@@ -117,9 +119,9 @@ class Node:
 
     @property
     def last_opened_time(self):
-        return datetime.fromtimestamp(
-            int(self.metadata["lastOpened"]) / 1000
-        ).strftime(self.date_format)
+        return datetime.fromtimestamp(int(self.metadata["lastOpened"]) / 1000).strftime(
+            self.date_format
+        )
 
     @property
     def is_collection(self):

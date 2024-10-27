@@ -100,14 +100,17 @@ class MarkdownWriter:
             page_highlights = []
 
             for _, tags, text_or_path, color in group:
+                base_name = os.path.basename(text_or_path)
                 if color is None:
                     os.makedirs(static_dir, exist_ok=True)
                     shutil.copy(
                         text_or_path,
-                        os.path.join(static_dir, os.path.basename(text_or_path)),
+                        static_dir / base_name,
                     )
+                    assert os.path.exists(static_dir / base_name), \
+                        f"static file {static_dir / base_name} does not exist"
                     page_highlights.append(
-                        f"![Image (page {page_index})](statics/{os.path.join(name, os.path.basename(text_or_path))})"
+                        f"![Image (page {page_index})](statics/{os.path.join(name, base_name)})"
                     )
                     # remove the image file
                     os.remove(text_or_path)
