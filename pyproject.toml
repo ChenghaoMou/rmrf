@@ -16,4 +16,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-rmscene = { path = "../rmscene", editable = true }
+rmscene = { git = "https://github.com/ChenghaoMou/rmscene.git" }

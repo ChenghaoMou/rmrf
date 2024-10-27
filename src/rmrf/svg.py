@@ -5,6 +5,8 @@
 # description : based on https://github.com/ricklupton/rmc
 #
 
+import base64
+import io
 import math
 import string
 import xml.dom.minidom
@@ -13,6 +15,7 @@ from io import StringIO
 from typing import Iterable
 
 from loguru import logger
+from PIL import Image
 from rmscene import (
     Block,
     RootTextBlock,
@@ -29,7 +32,7 @@ SCREEN_HEIGHT = 1872
 XPOS_SHIFT = SCREEN_WIDTH / 2
 
 SVG_HEADER = string.Template("""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" height="$height" width="$width">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" height="$height" width="$width">
     <script type="application/ecmascript"> 
         <![CDATA[
             var visiblePage = 'p1';
@@ -58,6 +61,8 @@ def blocks_to_svg(
     ypos_shift: float = 0,
     screen_width: int = SCREEN_WIDTH,
     screen_height: int = SCREEN_HEIGHT,
+    base_image: Image.Image | None = None,
+    margin: int = 0,
 ):
     blocks = list(blocks)
     output_text = ""
@@ -74,8 +79,15 @@ def blocks_to_svg(
         height=svg_doc_info.height, width=svg_doc_info.width
     )
 
+    if base_image is not None:
+        buffered = io.BytesIO()
+        base_image.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        output_text += f'<image xlink:href="data:image/png;base64,{img_str}" x="{margin}" y="{margin}" width="{svg_doc_info.width - margin * 2}" height="{svg_doc_info.height - margin * 2}" />'
+
     output_text += '<g id="p1" style="display:inline">'
     output_text += '<filter id="blurMe"><feGaussianBlur in="SourceGraphic" stdDeviation="10" /></filter>'
+
 
     for block, color in blocks:
         if isinstance(block, SceneLineItemBlock):
@@ -88,8 +100,7 @@ def blocks_to_svg(
     output_text += "<!-- clickable rect to flip pages -->"
     output_text += f'<rect x="0" y="0" width="{svg_doc_info.width}" height="{svg_doc_info.height}" fill-opacity="0"/>'
     output_text += "</g> </svg>"
-    output.write(xml.dom.minidom.parseString(output_text).toprettyxml(indent="  "))
-
+    output.write(output_text)
 
 def draw_stroke(
     block: SceneLineItemBlock,

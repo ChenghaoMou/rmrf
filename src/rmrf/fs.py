@@ -154,7 +154,13 @@ class Node:
     @staticmethod
     def is_highlight_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
         # It must have at least 5 bytes to contain a color (a, r, g, b, ?)
-        return block.extra_data.startswith(b"\xa4\x01") and len(block.extra_data) >= 5
+        return (
+            block.extra_data.startswith(b"\xa4\x01")
+            and len(block.extra_data) >= 5
+            and block.item
+            and block.item.value
+            and block.item.value.text
+        )
 
     @staticmethod
     def is_handwriting_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
@@ -175,6 +181,8 @@ class FileSystem:
             cache_dir,
         )
         self.nodes = {}
+        file_ids = self.read_file_ids()
+        self.parse_hierarchy(file_ids)
 
     def add_node(self, node_id, metadata):
         node = Node(node_id, metadata, self.source_dir, self.cache_dir)

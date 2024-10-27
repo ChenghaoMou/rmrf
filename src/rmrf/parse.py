@@ -3,6 +3,7 @@ from tempfile import NamedTemporaryFile
 
 import fitz
 from loguru import logger
+from PIL import Image
 from rich.console import Console
 from rmscene import (
     RootTextBlock,
@@ -132,7 +133,7 @@ def extract_highlights(node: Node) -> list:
                     y_max * page_height,
                 )
                 # cut-out
-                if words := page.get_text("words", clip=rect):
+                if len(words := page.get_text("words", clip=rect)) > 5:
                     # snaps to words crop with 10 pixels margin
                     # margin = 3
                     # x_min = max(min(words, key=lambda x: x[0])[0] - margin, 0)
@@ -216,6 +217,17 @@ def extract_highlights(node: Node) -> list:
 
                 margin = 100
 
+                if doc is not None and page_index is not None:
+                    page = doc[page_index]
+                    image = page.get_pixmap(
+                        dpi=100,
+                    )
+                    base_image = Image.frombytes(
+                        "RGB", (image.width, image.height), image.samples
+                    )
+                else:
+                    base_image = None
+
                 blocks_to_svg(
                     svg_blocks,
                     f,
@@ -223,6 +235,8 @@ def extract_highlights(node: Node) -> list:
                     ypos_shift=math.ceil(y_delta) + margin,
                     screen_width=screen_width + margin * 2,
                     screen_height=screen_height + margin * 2,
+                    base_image=base_image,
+                    margin=margin,
                 )
 
                 highlights.append(

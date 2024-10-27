@@ -33,7 +33,7 @@ tags:
 """
 
 Highlight_Template = """
-<mark style="background-color: rgb({r:02x}{g:02x}{b:02x});">{text}</mark>
+<mark style="background-color: #{r:02x}{g:02x}{b:02x};">{text}</mark>
 """
 
 Page_Template = """
@@ -51,11 +51,17 @@ class MarkdownWriter:
         static_dir: str,
         cache_dir: str,
         title_getter: Callable[[str], str],
+        file_template: str = Template,
+        highlight_template: str = Highlight_Template,
+        page_template: str = Page_Template,
     ):
         self.target_dir = Path(target_dir)
         self.static_dir = Path(static_dir)
         self.cache_dir = Path(cache_dir)
         self.title_getter = title_getter
+        self.file_template = file_template
+        self.highlight_template = highlight_template
+        self.page_template = page_template
 
     def update(self, node: Node, force=False):
         name = hashlib.shake_256(node.name.encode()).hexdigest(6)
@@ -116,7 +122,7 @@ class MarkdownWriter:
                     os.remove(text_or_path)
                 else:
                     page_highlights.append(
-                        Highlight_Template.format(
+                        self.highlight_template.format(
                             text=text_or_path,
                             r=color[0],
                             g=color[1],
@@ -131,7 +137,7 @@ class MarkdownWriter:
                 tag_content = ""
 
             highlight_text.append(
-                Page_Template.format(
+                self.page_template.format(
                     page_index=page_index,
                     tags=tag_content,
                     highlights="\n".join(page_highlights),
@@ -141,7 +147,7 @@ class MarkdownWriter:
         try:
             original_title = self.title_getter(node.name)
             title = original_title.replace('"', " ").replace("'", " ")
-            note = Template.format(
+            note = self.file_template.format(
                 original_title=original_title,
                 title=title,
                 alias=title,
