@@ -19,6 +19,7 @@ from .parse import (
     TextHighlight,
     extract_highlights,
 )
+from .zotero_helper import ZoteroLibrary
 
 console = Console()
 
@@ -35,6 +36,31 @@ tags:
 
 # {original_title}
 
+{highlights}
+"""
+
+Zotero_Template = """---
+title: "{title}"
+alias:
+  - "{alias}"
+created: {created}
+updated: {updated}
+modified: {modified}
+authors: {authors}
+url: {url}
+zotero_url: {zotero_url}
+tags:
+  - reMarkable
+---
+
+# {original_title}
+
+[Open in Zotero]({zotero_url})
+
+## Abstract
+{abstract}
+
+## Highlights
 {highlights}
 """
 
@@ -61,6 +87,7 @@ class MarkdownWriter:
         file_template: str = Template,
         highlight_template: str = Highlight_Template,
         page_template: str = Page_Template,
+        enable_zotero: bool = False,
     ):
         self.target_dir = Path(target_dir)
         self.static_dir = Path(static_dir)
@@ -69,6 +96,7 @@ class MarkdownWriter:
         self.file_template = file_template
         self.highlight_template = highlight_template
         self.page_template = page_template
+        self.enable_zotero = enable_zotero
 
     def update(self, node: Node, force=False):
         name = hashlib.shake_256(node.name.encode()).hexdigest(6)
@@ -159,6 +187,31 @@ class MarkdownWriter:
         try:
             original_title = self.title_getter(node.name)
             title = original_title.replace('"', " ").replace("'", " ")
+
+            if self.enable_zotero:
+                lib = ZoteroLibrary()
+                logger.info(f"Looking up Zotero item for {original_title}")
+                zotero_item = lib.lookup_item_and_pdf(original_title)
+                if zotero_item:
+                    logger.info(f"Found Zotero item for {original_title}")
+                    note = Zotero_Template.format(
+                        original_title=original_title,
+                        title=title,
+                        alias=title,
+                        created=node.created_time,
+                        updated=node.last_modified_time,
+                        modified=datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f"),
+                        highlights="\n\n".join(highlight_text),
+                        authors=zotero_item.authors,
+                        url=zotero_item.url,
+                        zotero_url=zotero_item.zotero_url,
+                        abstract=zotero_item.abstract,
+                    )
+                    if highlight_text:
+                        with open(f"{self.target_dir}/{name}.md", "w") as f:
+                            f.write(note)
+                        return True, last_modified, node.last_modified_time
+
             note = self.file_template.format(
                 original_title=original_title,
                 title=title,
