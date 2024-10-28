@@ -8,11 +8,17 @@ from itertools import groupby
 from pathlib import Path
 from typing import Callable
 
+from loguru import logger
 from rich.console import Console
 from rich.tree import Tree
 
 from .fs import FileSystem, Node
-from .parse import extract_highlights
+from .parse import (
+    Highlight,
+    ImageHighlight,
+    TextHighlight,
+    extract_highlights,
+)
 
 console = Console()
 
@@ -44,6 +50,7 @@ Page_Template = """
 {highlights}
 """
 
+
 class MarkdownWriter:
     def __init__(
         self,
@@ -67,6 +74,8 @@ class MarkdownWriter:
         name = hashlib.shake_256(node.name.encode()).hexdigest(6)
         old_content = ""
         last_modified: str | None = None
+
+        # * Read the old content if the file exists and check the dates
         if os.path.exists(f"{self.target_dir}/{name}.md"):
             with open(f"{self.target_dir}/{name}.md", "r") as f:
                 old_content = f.read()
@@ -87,7 +96,7 @@ class MarkdownWriter:
                     ):
                         return False, last_modified, None
 
-        highlights = extract_highlights(node)
+        highlights: list[Highlight] = extract_highlights(node)
         highlight_text = []
         static_dir = self.static_dir / name
 
@@ -100,39 +109,42 @@ class MarkdownWriter:
             os.remove(f"{self.target_dir}/{name}.md")
 
         for page_index, group in groupby(
-            sorted(highlights, key=lambda x: x[0]),
-            key=lambda x: x[0],
+            sorted(highlights, key=lambda x: x.page_index),
+            key=lambda x: x.page_index,
         ):
             page_highlights = []
 
-            for _, tags, text_or_path, color in group:
-                base_name = os.path.basename(text_or_path)
-                if color is None:
+            for highlight in group:
+                if isinstance(highlight, ImageHighlight):
+                    base_name = os.path.basename(highlight.image_path)
                     os.makedirs(static_dir, exist_ok=True)
                     shutil.copy(
-                        text_or_path,
+                        highlight.image_path,
                         static_dir / base_name,
                     )
-                    assert os.path.exists(static_dir / base_name), \
-                        f"static file {static_dir / base_name} does not exist"
+                    assert os.path.exists(
+                        static_dir / base_name
+                    ), f"static file {static_dir / base_name} does not exist"
                     page_highlights.append(
                         f"![Image (page {page_index})](statics/{os.path.join(name, base_name)})"
                     )
                     # remove the image file
-                    os.remove(text_or_path)
-                else:
+                    os.remove(highlight.image_path)
+                elif isinstance(highlight, TextHighlight):
                     page_highlights.append(
                         self.highlight_template.format(
-                            text=text_or_path,
-                            r=color[0],
-                            g=color[1],
-                            b=color[2],
+                            text=highlight.text,
+                            r=highlight.color[0],
+                            g=highlight.color[1],
+                            b=highlight.color[2],
                             page_index=page_index,
                         )
                     )
 
-            if tags:
-                tag_content = "tags: " + ", ".join(f"#{tag.replace(' ', '_')}" for tag in tags)
+            if highlight.tags:
+                tag_content = "tags: " + ", ".join(
+                    f"#{tag.replace(' ', '_')}" for tag in highlight.tags
+                )
             else:
                 tag_content = ""
 
@@ -162,14 +174,14 @@ class MarkdownWriter:
                 return True, last_modified, node.last_modified_time
 
         except Exception as e:
-            console.print(f"[red]{e}[/red]")
+            logger.error(f"[red]{e}[/red]")
             raise e
         finally:
             for f in self.cache_dir.glob("*.png"):
                 try:
                     os.remove(f)
                 except Exception as e:
-                    console.print(f"[red]{e}[/red]")
+                    logger.error(f"[red]{e}[/red]")
 
         return False, last_modified, node.last_modified_time
 

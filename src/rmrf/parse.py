@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 import fitz
@@ -18,6 +19,28 @@ from .svg import blocks_to_svg
 from .writing_tools import remarkable_palette
 
 console = Console()
+
+
+@dataclass
+class Highlight:
+    page_index: int
+    tags: set[str]
+
+
+@dataclass
+class TextHighlight(Highlight):
+    text: str
+    color: tuple[int, int, int, int]
+
+
+@dataclass
+class ImageHighlight(Highlight):
+    image_path: str
+
+
+@dataclass
+class DrawingHighlight(ImageHighlight):
+    pass
 
 
 def get_color(
@@ -75,7 +98,7 @@ def extract_highlights(node: Node) -> list:
 
         with open(rm_file, "rb") as f:
             blocks = read_blocks(f)
-            for block_idx, block in enumerate(blocks):
+            for _, block in enumerate(blocks):
                 if not isinstance(
                     block, (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
                 ):
@@ -93,21 +116,20 @@ def extract_highlights(node: Node) -> list:
                 if block.item.deleted_length > 0:
                     continue
 
-                # If this is a highlight block, we don't need to draw it
+                # * If this is a highlight block, we don't need to draw it
                 if node.is_highlight_block(block):
-                    color = get_color(block)
                     highlights.append(
-                        (
-                            page_index or -1,
-                            node.page_tags.get(page_index, set()),
-                            block.item.value.text,
-                            color,
+                        TextHighlight(
+                            page_index=page_index or -1,
+                            tags=node.page_tags.get(page_index, set()),
+                            text=block.item.value.text,
+                            color=get_color(block),
                         )
                     )
 
                     continue
 
-                # If this is not a handwriting block, we don't need to draw it
+                # * If this is not a handwriting block, we don't need to draw it
                 if not node.is_handwriting_block(block):
                     continue
 
@@ -132,22 +154,8 @@ def extract_highlights(node: Node) -> list:
                     x_max * page_width,
                     y_max * page_height,
                 )
-                # cut-out
-                if len(words := page.get_text("words", clip=rect)) > 5:
-                    # snaps to words crop with 10 pixels margin
-                    # margin = 3
-                    # x_min = max(min(words, key=lambda x: x[0])[0] - margin, 0)
-                    # y_min = max(min(words, key=lambda x: x[1])[1] - margin, 0)
-                    # x_max = min(
-                    #     max(words, key=lambda x: x[2])[2] + margin,
-                    #     page_width,
-                    # )
-                    # y_max = min(
-                    #     max(words, key=lambda x: x[3])[3] + margin,
-                    #     page_height,
-                    # )
-                    # rect = fitz.Rect(x_min, y_min, x_max, y_max)
-
+                # * image cropping logic
+                if len(_ := page.get_text("words", clip=rect)) > 5:
                     image = page.get_pixmap(
                         dpi=300,
                         clip=rect,
@@ -157,11 +165,10 @@ def extract_highlights(node: Node) -> list:
                     ) as f:
                         image.save(f.name)
                         highlights.append(
-                            (
-                                page_index,
-                                node.page_tags.get(page_index, set()),
-                                f.name,
-                                None,
+                            ImageHighlight(
+                                page_index=page_index,
+                                tags=node.page_tags.get(page_index, set()),
+                                image_path=f.name,
                             )
                         )
 
@@ -240,12 +247,11 @@ def extract_highlights(node: Node) -> list:
                 )
 
                 highlights.append(
-                    (
-                        page_index,
-                        node.page_tags.get(page_index, set()),
-                        f.name,
-                        None,
+                    DrawingHighlight(
+                        page_index=page_index,
+                        tags=node.page_tags.get(page_index, set()),
+                        image_path=f.name,
                     )
                 )
 
-    return sorted(highlights, key=lambda x: x[0])
+    return sorted(highlights, key=lambda x: x.page_index)
