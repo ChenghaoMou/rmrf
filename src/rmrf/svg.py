@@ -63,6 +63,8 @@ def blocks_to_svg(
     screen_height: int = SCREEN_HEIGHT,
     base_image: Image.Image | None = None,
     margin: int = 0,
+    x_scale: float = 1.0,
+    y_scale: float = 1.0,
 ):
     blocks = list(blocks)
     output_text = ""
@@ -88,12 +90,11 @@ def blocks_to_svg(
     output_text += '<g id="p1" style="display:inline">'
     output_text += '<filter id="blurMe"><feGaussianBlur in="SourceGraphic" stdDeviation="10" /></filter>'
 
-
     for block, color in blocks:
         if isinstance(block, SceneLineItemBlock):
-            output_text += draw_stroke(block, svg_doc_info, color)
+            output_text += draw_stroke(block, svg_doc_info, color, x_scale, y_scale)
         elif isinstance(block, RootTextBlock):
-            output_text += draw_text(block, svg_doc_info)
+            output_text += draw_text(block, svg_doc_info, x_scale, y_scale)
         else:
             logger.warning(f"not converting block: {block.__class__}")
 
@@ -102,13 +103,16 @@ def blocks_to_svg(
     output_text += "</g> </svg>"
     output.write(output_text)
 
+
 def draw_stroke(
     block: SceneLineItemBlock,
     svg_doc_info: SvgDocInfo,
     color: tuple[int, int, int, int],
+    x_scale: float = 1.0,
+    y_scale: float = 1.0,
 ) -> str:
     output_text = ""
-    logger.debug("----SceneLineItemBlock")
+    # logger.debug("----SceneLineItemBlock")
     output_text += f"<!-- SceneLineItemBlock item_id: {block.item.item_id} -->"
 
     if block.item.value is None:
@@ -132,8 +136,8 @@ def draw_stroke(
     last_segment_width = 0
 
     for point_id, point in enumerate(block.item.value.points):
-        xpos = point.x + svg_doc_info.xpos_delta
-        ypos = point.y + svg_doc_info.ypos_delta
+        xpos = (point.x + svg_doc_info.xpos_delta) * x_scale
+        ypos = (point.y + svg_doc_info.ypos_delta) * y_scale
         assert (
             0 <= xpos <= svg_doc_info.width
         ), f"xpos: {xpos} width: {svg_doc_info.width}"
@@ -173,7 +177,12 @@ def draw_stroke(
     return output_text
 
 
-def draw_text(block: RootTextBlock, svg_doc_info: SvgDocInfo) -> str:
+def draw_text(
+    block: RootTextBlock,
+    svg_doc_info: SvgDocInfo,
+    x_scale: float = 1.0,
+    y_scale: float = 1.0,
+) -> str:
     output_text = ""
     logger.debug("----RootTextBlock")
     output_text += f"<!-- RootTextBlock item_id: {block.block_id} -->"
@@ -203,8 +212,8 @@ def draw_text(block: RootTextBlock, svg_doc_info: SvgDocInfo) -> str:
 </style>"""
 
     content = ""
-    xpos = block.value.pos_x + svg_doc_info.xpos_delta
-    ypos = block.value.pos_y + svg_doc_info.ypos_delta
+    xpos = (block.value.pos_x + svg_doc_info.xpos_delta) * x_scale
+    ypos = (block.value.pos_y + svg_doc_info.ypos_delta) * y_scale
 
     newlines = 0
     for text_item in block.value.items.sequence_items():
@@ -296,7 +305,6 @@ def get_dimensions(
     screen_height: int = SCREEN_HEIGHT,
 ):
     xmin, xmax, ymin, ymax = get_limits(blocks)
-    logger.debug(f"xmin: {xmin} xmax: {xmax} ymin: {ymin} ymax: {ymax}")
 
     # * {xpos,ypos} coordinates are based on the top-center point
     # * of the doc **iff there are no text boxes**. When you add
@@ -320,9 +328,9 @@ def get_dimensions(
             )
         )
     )
-    logger.debug(
-        f"height: {height} width: {width} xpos_delta: {xpos_delta} ypos_delta: {ypos_delta}"
-    )
+    # logger.debug(
+    #     f"height: {height} width: {width} xpos_delta: {xpos_delta} ypos_delta: {ypos_delta}"
+    # )
 
     return SvgDocInfo(
         height=height, width=width, xpos_delta=xpos_delta, ypos_delta=ypos_delta

@@ -1,9 +1,12 @@
 import json
+import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import fitz
+import numpy as np
 from loguru import logger
 from rmscene import SceneGlyphItemBlock, SceneLineItemBlock
 
@@ -53,29 +56,16 @@ class Node:
     # "customZoomScale": 1.062249010581842,
 
     @property
-    def height(self):
-        if self.file_type in ["notebook", "DocumentType"]:
-            # logger.debug(f"Using default screen height for notebook {self.id}")
-            return 2160
-        return self.metadata[
-            "customZoomPageHeight"
-        ]  # customZoomPageHeight with default zoom scale
+    def orientation(self):
+        return self.metadata["orientation"]
 
     @property
-    def width(self):
-        if self.file_type in ["notebook", "DocumentType"]:
-            # logger.debug(f"Using default screen width for notebook {self.id}")
-            return 1620
-        return self.metadata[
-            "customZoomPageWidth"
-        ]  # customZoomPageWidth with default zoom scale
-
-    def page_height(self, page_idx: int):
-        return self.height + self.page_scroll[page_idx]
+    def zoom_mode(self):
+        return self.metadata["zoomMode"]
 
     @property
     def zoom_scale(self):
-        return self.metadata["customZoomScale"]  # customZoomScale default
+        return self.metadata["customZoomScale"]
 
     @property
     def margin(self):
@@ -83,23 +73,27 @@ class Node:
 
     @property
     def center_x(self):
-        return self.metadata["customZoomCenterX"]  # customZoomCenterX default
+        return self.metadata["customZoomCenterX"]
 
     @property
     def center_y(self):
-        return self.metadata["customZoomCenterY"]  # customZoomCenterY default
+        return self.metadata["customZoomCenterY"]
 
-    def absolute_x(self, relative_x: int):
-        return relative_x + self.width / 2
+    @property
+    def screen_height(self):
+        return 2160
 
-    def absolute_y(self, relative_y: int):
-        return relative_y
+    @property
+    def screen_width(self):
+        return 1620
 
-    def x_percent(self, relative_x: int):
-        return self.absolute_x(relative_x) / self.width
+    @property
+    def zoom_height(self):
+        return self.metadata["customZoomPageHeight"]
 
-    def y_percent(self, relative_y: int):
-        return self.absolute_y(relative_y) / self.height
+    @property
+    def zoom_width(self):
+        return self.metadata["customZoomPageWidth"]
 
     @property
     def created_time(self):
@@ -165,6 +159,17 @@ class Node:
     @staticmethod
     def is_handwriting_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
         return block.item and block.item.value and block.item.value.points
+
+    @property
+    def doc(self) -> fitz.Document | None:
+        if self.file_type == "pdf" or self.file_type == "epub":
+            if (pdf_file := self.source_dir / f"{self.id}.pdf").exists():
+                doc = fitz.open(pdf_file)
+            else:
+                doc = None
+        else:
+            doc = None
+        return doc
 
 
 class FileSystem:

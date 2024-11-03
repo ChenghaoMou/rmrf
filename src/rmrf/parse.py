@@ -13,6 +13,7 @@ from rmscene import (
     UnreadableBlock,
     read_blocks,
 )
+from shapely.geometry import Polygon
 
 from .fs import Node
 from .svg import blocks_to_svg
@@ -38,9 +39,7 @@ class ImageHighlight(Highlight):
     image_path: str
 
 
-@dataclass
-class DrawingHighlight(ImageHighlight):
-    pass
+DrawingHighlight = ImageHighlight
 
 
 def get_color(
@@ -60,45 +59,222 @@ def get_limits(
     x_values = []
     y_values = []
     for block in blocks:
-        if isinstance(block, SceneLineItemBlock):
+        if (
+            isinstance(block, SceneLineItemBlock)
+            and block.item
+            and block.item.value
+            and block.item.value.points
+        ):
             x_values.extend(p.x for p in block.item.value.points)
             y_values.extend(p.y for p in block.item.value.points)
-        elif isinstance(block, RootTextBlock):
+        elif isinstance(block, RootTextBlock) and block.value:
             x_values.append(block.value.pos_x)
             y_values.append(block.value.pos_y)
+
+    if not x_values or not y_values:
+        return (0, 0, 0, 0)
 
     return (min(x_values), min(y_values), max(x_values), max(y_values))
 
 
-def extract_highlights(node: Node) -> list:
-    highlights = []
+def is_rectangular(
+    block: SceneLineItemBlock | SceneGlyphItemBlock, threshold: float = 0.8
+) -> bool:
+    """
+    Test if the block is close to a rectangle.
+
+    Parameters
+    ----------
+    block: SceneLineItemBlock | SceneGlyphItemBlock
+        The block to test.
+    threshold: float
+        The threshold for the ratio of the area of the polygon to the area of the rectangle. Defaults to 0.8.
+
+    Returns
+    -------
+    bool
+        True if the block is close to a rectangle, False otherwise.
+    """
+    polygon = Polygon([(p.x, p.y) for p in block.item.value.points])
+    x_min, y_min, x_max, y_max = get_limits([block])
+    rectangle = (x_max - x_min) * (y_max - y_min)
+    if rectangle <= 0:
+        return False
+    return polygon.area / rectangle >= threshold
+
+
+def get_transformation(
+    node: Node,
+    blocks: list[SceneLineItemBlock | SceneGlyphItemBlock | RootTextBlock],
+    doc: fitz.Document | None = None,
+    page_index: int | None = None,
+    dpi: int = 300,
+) -> tuple[int, int, int, int, float, float, Image.Image | None]:
+    """
+    Get the transformation matrix for the blocks.
+
+    Parameters
+    ----------
+    node: Node
+        The node to get the transformation for.
+    blocks: list[SceneLineItemBlock | SceneGlyphItemBlock | RootTextBlock]
+        The blocks to get the transformation for.
+    doc: fitz.Document | None
+        The document to get the transformation for. Defaults to None.
+    page_index: int | None
+        The page index to get the transformation for. Defaults to None.
+    dpi: int
+        The DPI to use for the transformation. Defaults to 300.
+
+    Returns
+    -------
+    tuple[int, int, int, int, float, float, Image.Image | None]
+        The transformation matrix for the blocks, which is a tuple of the form (x_delta, y_delta, screen_width, screen_height, x_scale, y_scale, base_image).
+    """
+    logger.warning("Transformation is highly experimental")
+
+    x_min, y_min, x_max, y_max = get_limits(blocks)
+    logger.debug(f"{x_min=:.2f}, {y_min=:.2f}, {x_max=:.2f}, {y_max=:.2f}")
+
+    if doc is not None and page_index is not None:
+        page = doc[page_index]
+        image = page.get_pixmap(
+            dpi=dpi,
+        )
+        base_image = Image.frombytes("RGB", (image.width, image.height), image.samples)
+        image_width = image.width
+        image_height = image.height
+    else:
+        base_image = None
+        image_width = None
+        image_height = None
+
+    screen_width = node.zoom_width
+    screen_height = node.zoom_height
+
+    logger.debug(f"{screen_width=:.2f}, {screen_height=:.2f}")
+
+    x_delta = screen_width / 2 + node.center_x
+    y_delta = abs(y_min) if y_min < 0 else 0
+
+    while (
+        x_max - x_min > screen_width
+        or x_min + x_delta < 0
+        or x_max + x_delta > screen_width
+        or x_max > screen_width
+        or (x_delta - node.center_x) * 2 > screen_width
+    ):
+        c1, r1 = abs(x_min) if x_min < 0 else 0, "Offsetting negative x"
+        c2, r2 = x_delta, "x_delta"
+        c3, r3 = screen_width / 2 + node.center_x, "Screen width / 2 + center_x"
+
+        x_delta_ = max(c1, c2, c3)
+
+        if x_delta_ != x_delta:
+            reason = [r1, r2, r3][[c1, c2, c3].index(x_delta_)]
+            logger.warning(f"{x_delta=:.2f} -> {x_delta_=:.2f} ({reason})")
+        x_delta = x_delta_
+
+        c1, r1 = math.ceil(x_max - x_min), "x_max - x_min"
+        c2, r2 = screen_width, "screen_width"
+        c3, r3 = math.ceil((x_delta - node.center_x) * 2), "2 * (x_delta - center_x)"
+        c4, r4 = math.ceil(x_max + x_delta), "x_max + x_delta"
+
+        screen_width_ = max(c1, c2, c3, c4)
+
+        if screen_width_ != screen_width:
+            reason = [r1, r2, r3, r4][[c1, c2, c3, c4].index(screen_width_)]
+            logger.warning(f"{screen_width=:.2f} -> {screen_width_=:.2f} ({reason})")
+            screen_height = screen_height * screen_width_ / screen_width
+
+        screen_width = screen_width_
+
+    while (
+        y_max - y_min > screen_height
+        or y_min + y_delta < 0
+        or y_max + y_delta > screen_height
+        or y_max > screen_height
+    ):
+        c1, r1 = abs(y_min) if y_min < 0 else 0, "Offsetting negative y"
+        c2, r2 = node.center_y - screen_height / 2, "center_y - screen_height / 2"
+        c3, r3 = y_delta, "y_delta"
+
+        y_delta_ = max(c1, c2, c3)
+
+        if y_delta_ != y_delta:
+            reason = [r1, r2, r3][[c1, c2, c3].index(y_delta_)]
+            logger.warning(f"{y_delta=:.2f} -> {y_delta_=:.2f} ({reason})")
+        y_delta = y_delta_
+
+        c1, r1 = math.ceil(y_max - y_min), "y_max - y_min"
+        c2, r2 = screen_height, "screen_height"
+        c3, r3 = math.ceil(y_max + y_delta), "y_max + y_delta"
+        c4, r4 = math.ceil(y_max), "y_max"
+
+        screen_height_ = max(c1, c2, c3, c4)
+
+        if screen_height_ != screen_height:
+            reason = [r1, r2, r3, r4][[c1, c2, c3, c4].index(screen_height_)]
+            logger.warning(f"{screen_height=:.2f} -> {screen_height_=:.2f} ({reason})")
+            screen_width = screen_width * screen_height_ / screen_height
+
+        screen_height = screen_height_
+
+    screen_width = math.ceil(screen_width)
+    screen_height = math.ceil(screen_height)
+    x_delta = math.ceil(x_delta)
+    y_delta = math.ceil(y_delta)
+
+    assert x_max + x_delta <= screen_width
+    assert x_min + x_delta >= 0
+    assert x_max - x_min <= screen_width
+    assert y_max + y_delta <= screen_height
+    assert y_min + y_delta >= 0
+    assert y_max - y_min <= screen_height
+
+    if base_image is not None:
+        x_scale = image_width / screen_width
+        y_scale = image_height / screen_height
+        x_scale = y_scale = round(min(x_scale, y_scale), 2)
+        screen_width = math.ceil(max(screen_width * x_scale, image_width))
+        screen_height = math.ceil(max(screen_height * y_scale, image_height))
+
+        # logger.warning(f"final: {x_scale=:.2f}, {y_scale=:.2f}, {screen_width=:.2f}, {screen_height=:.2f}, ratio: {screen_width / screen_height:.2f}")
+    else:
+        x_scale = y_scale = 1.0
+
+    return x_delta, y_delta, screen_width, screen_height, x_scale, y_scale, base_image
+
+
+def extract_highlights(node: Node) -> list[Highlight]:
+    highlights: list[Highlight] = []
     highlight_dir = node.source_dir / node.id
     if not highlight_dir.exists():
         return highlights
 
-    page_width = None
-    page_height = None
-
-    if node.file_type == "pdf" or node.file_type == "epub":
-        if (pdf_file := node.source_dir / f"{node.id}.pdf").exists():
-            doc = fitz.open(pdf_file)
-        else:
-            doc = None
-    else:
-        doc = None
-        if node.file_type in {"notebook", "DocumentType"}:
-            page_width = node.width
-            page_height = node.height
+    doc = node.doc
 
     for rm_file in highlight_dir.glob("*.rm"):
         basename = rm_file.name
         page_id = basename.split(".")[0]
         page_index = node.id2page.get(page_id, None)
+
         svg_blocks = []
 
         with open(rm_file, "rb") as f:
-            blocks = read_blocks(f)
-            for _, block in enumerate(blocks):
+            blocks = list(read_blocks(f))
+
+            (
+                x_delta,
+                y_delta,
+                screen_width,
+                screen_height,
+                x_scale,
+                y_scale,
+                base_image,
+            ) = get_transformation(node, blocks, doc, page_index)
+
+            for block in blocks:
                 if not isinstance(
                     block, (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
                 ):
@@ -134,36 +310,21 @@ def extract_highlights(node: Node) -> list:
                     continue
 
                 color = get_color(block)
-                points = [p for p in block.item.value.points]
-
-                x_min = node.x_percent(min(p.x for p in points))
-                y_min = node.y_percent(min(p.y for p in points))
-                x_max = node.x_percent(max(p.x for p in points))
-                y_max = node.y_percent(max(p.y for p in points))
-
-                if doc is None or page_index is None:
-                    svg_blocks.append((block, color))
-                    continue
-
-                page = doc[page_index]
-                page_width = int(page.rect.width)
-                page_height = int(page.rect.height)
-                rect = fitz.Rect(
-                    x_min * page_width,
-                    y_min * page_height,
-                    x_max * page_width,
-                    y_max * page_height,
-                )
-                # * image cropping logic
-                if len(_ := page.get_text("words", clip=rect)) > 5:
-                    image = page.get_pixmap(
-                        dpi=300,
-                        clip=rect,
+                # * test if the block is close to a rectangle
+                if is_rectangular(block):
+                    x_min, y_min, x_max, y_max = get_limits([block])
+                    cropped = base_image.crop(
+                        (
+                            (x_min + x_delta) * x_scale,
+                            (y_min + y_delta) * y_scale,
+                            (x_max + x_delta) * x_scale,
+                            (y_max + y_delta) * y_scale,
+                        )
                     )
                     with NamedTemporaryFile(
-                        suffix=".png", delete=False, dir=node.cache_dir
+                        mode="wb", suffix=".png", delete=False, dir=node.cache_dir
                     ) as f:
-                        image.save(f.name)
+                        cropped.save(f)
                         highlights.append(
                             ImageHighlight(
                                 page_index=page_index,
@@ -171,8 +332,7 @@ def extract_highlights(node: Node) -> list:
                                 image_path=f.name,
                             )
                         )
-
-                    continue
+                        continue
 
                 svg_blocks.append((block, color))
 
@@ -180,60 +340,7 @@ def extract_highlights(node: Node) -> list:
             with NamedTemporaryFile(
                 mode="w", suffix=".svg", delete=False, dir=node.cache_dir
             ) as f:
-                x_min, y_min, x_max, y_max = get_limits([b for b, _ in svg_blocks])
-
-                screen_width = node.width
-                screen_height = node.height
-
-                x_delta = node.width / 2
-                y_delta = abs(y_min) if y_min < 0 else 0
-
-                if (
-                    x_max - x_min > screen_width
-                    or x_max + x_delta > screen_width
-                    or x_max > screen_width
-                ):
-                    x_delta = abs(x_min) if x_min < 0 else 0
-                    screen_width = max(
-                        math.ceil(x_max - x_min), screen_width, x_max + x_delta
-                    )
-
-                if (
-                    y_max - y_min > screen_height
-                    or y_max + y_delta > screen_height
-                    or y_max > screen_height
-                ):
-                    y_delta = abs(y_min) if y_min < 0 else 0
-                    screen_height = max(
-                        math.ceil(y_max - y_min), screen_height, y_max + y_delta
-                    )
-
-                x_delta = math.ceil(x_delta)
-                y_delta = math.ceil(y_delta)
-
-                logger.debug(
-                    f"screen_width: {screen_width}, screen_height: {screen_height}"
-                )
-                logger.debug(f"x_delta: {x_delta}, y_delta: {y_delta}")
-                logger.debug(
-                    f"x_min: {x_min:.2f} -> {x_min + x_delta:.2f}, y_min: {y_min:.2f} -> {y_min + y_delta:.2f}"
-                )
-                logger.debug(
-                    f"x_max: {x_max:.2f} -> {x_max + x_delta:.2f}, y_max: {y_max:.2f} -> {y_max + y_delta:.2f}"
-                )
-
-                margin = 100
-
-                if doc is not None and page_index is not None:
-                    page = doc[page_index]
-                    image = page.get_pixmap(
-                        dpi=100,
-                    )
-                    base_image = Image.frombytes(
-                        "RGB", (image.width, image.height), image.samples
-                    )
-                else:
-                    base_image = None
+                margin = 0
 
                 blocks_to_svg(
                     svg_blocks,
@@ -244,6 +351,8 @@ def extract_highlights(node: Node) -> list:
                     screen_height=screen_height + margin * 2,
                     base_image=base_image,
                     margin=margin,
+                    x_scale=x_scale,
+                    y_scale=y_scale,
                 )
 
                 highlights.append(
