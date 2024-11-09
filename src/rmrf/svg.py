@@ -7,6 +7,7 @@
 
 import base64
 import io
+import logging
 import math
 import string
 import xml.dom.minidom
@@ -14,7 +15,6 @@ from dataclasses import dataclass
 from io import StringIO
 from typing import Iterable
 
-from loguru import logger
 from PIL import Image
 from rmscene import (
     Block,
@@ -30,6 +30,7 @@ from .writing_tools import (
 SCREEN_WIDTH = 1404
 SCREEN_HEIGHT = 1872
 XPOS_SHIFT = SCREEN_WIDTH / 2
+logger = logging.getLogger("rmrf")
 
 SVG_HEADER = string.Template("""<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" height="$height" width="$width">
@@ -101,7 +102,7 @@ def blocks_to_svg(
     output_text += "<!-- clickable rect to flip pages -->"
     output_text += f'<rect x="0" y="0" width="{svg_doc_info.width}" height="{svg_doc_info.height}" fill-opacity="0"/>'
     output_text += "</g> </svg>"
-    output.write(output_text)
+    output.write(xml.dom.minidom.parseString(output_text).toprettyxml())
 
 
 def draw_stroke(

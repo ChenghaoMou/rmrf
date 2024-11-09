@@ -1,5 +1,6 @@
 import glob
 import hashlib
+import logging
 import os
 import re
 import shutil
@@ -8,7 +9,6 @@ from itertools import groupby
 from pathlib import Path
 from typing import Callable
 
-from loguru import logger
 from rich.console import Console
 from rich.tree import Tree
 
@@ -19,9 +19,10 @@ from .parse import (
     TextHighlight,
     extract_highlights,
 )
-from .zotero_helper import ZoteroLibrary
+from .zotero_helper import find_zotero_item
 
 console = Console()
+logger = logging.getLogger("rmrf")
 
 Template = """---
 title: "{title}"
@@ -189,11 +190,16 @@ class MarkdownWriter:
             title = original_title.replace('"', " ").replace("'", " ")
 
             if self.enable_zotero:
-                lib = ZoteroLibrary()
-                logger.info(f"Looking up Zotero item for {original_title}")
-                zotero_item = lib.lookup_item_and_pdf(original_title)
+                logger.info(
+                    f"Looking up Zotero item for [yellow]{original_title}[/yellow]",
+                    extra={"markup": True},
+                )
+                zotero_item = find_zotero_item(original_title)
                 if zotero_item:
-                    logger.info(f"Found Zotero item for {original_title}")
+                    logger.info(
+                        f"Found Zotero item for [yellow]{original_title}[/yellow]",
+                        extra={"markup": True},
+                    )
                     note = Zotero_Template.format(
                         original_title=original_title,
                         title=title,
@@ -227,14 +233,14 @@ class MarkdownWriter:
                 return True, last_modified, node.last_modified_time
 
         except Exception as e:
-            logger.error(f"[red]{e}[/red]")
+            logger.error(f"[red]{e}[/red]", extra={"markup": True})
             raise e
         finally:
             for f in self.cache_dir.glob("*.png"):
                 try:
                     os.remove(f)
                 except Exception as e:
-                    logger.error(f"[red]{e}[/red]")
+                    logger.error(f"[red]{e}[/red]", extra={"markup": True})
 
         return False, last_modified, node.last_modified_time
 

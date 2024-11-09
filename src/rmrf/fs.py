@@ -1,14 +1,15 @@
 import json
-import math
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 import fitz
-import numpy as np
-from loguru import logger
-from rmscene import SceneGlyphItemBlock, SceneLineItemBlock
+from rmscene import RootTextBlock, SceneGlyphItemBlock, SceneLineItemBlock, read_blocks
+from rmscene.scene_stream import Block
+
+logger = logging.getLogger("rmrf")
 
 
 @dataclass
@@ -48,12 +49,17 @@ class Node:
                 page_idx = self.id2page[item["pageId"]]
                 self.page_tags[page_idx].add(item["name"])
 
-    # "customZoomCenterX": 1.1180836815342663,
-    # "customZoomCenterY": 1454.6268696760806,
-    # "customZoomOrientation": "portrait",
-    # "customZoomPageHeight": 2654,
-    # "customZoomPageWidth": 1877,
-    # "customZoomScale": 1.062249010581842,
+        self.rm_blocks = {}
+        highlight_dir = self.source_dir / self.id
+        if not highlight_dir.exists():
+            return
+
+        for rm_file in highlight_dir.glob("*.rm"):
+            basename = rm_file.name
+            page_id = basename.split(".")[0]
+            page_index = self.id2page.get(page_id, None)
+            with open(rm_file, "rb") as f:
+                self.rm_blocks[page_index] = list(read_blocks(f))
 
     @property
     def orientation(self):
@@ -82,10 +88,12 @@ class Node:
     @property
     def screen_height(self):
         return 2160
+        # return 1872
 
     @property
     def screen_width(self):
         return 1620
+        # return 1404
 
     @property
     def zoom_height(self):
@@ -171,14 +179,25 @@ class Node:
             doc = None
         return doc
 
+    def get_page_blocks(self, page_idx: int) -> list[Block]:
+        return self.rm_blocks.get(page_idx, [])
+
+    def __len__(self):
+        return len(self.id2page)
+
+    @property
+    def valid_elements(self):
+        return (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
+
 
 class FileSystem:
     def __init__(self, source_dir: str, cache_dir: str):
-        logger.info(
-            f"Initializing FileSystem with source_dir: {source_dir} and cache_dir: {cache_dir}"
-        )
         self.source_dir = Path(source_dir)
         self.cache_dir = Path(cache_dir)
+        user_home = Path.home()
+        logger.info(
+            f"Initializing with ~/{str(self.source_dir.relative_to(user_home))} and ~/{str(self.cache_dir.relative_to(user_home))}"
+        )
         self.root = Node(
             "root",
             {"visibleName": "Root", "type": "CollectionType"},

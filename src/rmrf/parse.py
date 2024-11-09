@@ -1,9 +1,9 @@
+import logging
 import math
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 import fitz
-from loguru import logger
 from PIL import Image
 from rich.console import Console
 from rmscene import (
@@ -11,7 +11,6 @@ from rmscene import (
     SceneGlyphItemBlock,
     SceneLineItemBlock,
     UnreadableBlock,
-    read_blocks,
 )
 from shapely.geometry import Polygon
 
@@ -20,11 +19,18 @@ from .svg import blocks_to_svg
 from .writing_tools import remarkable_palette
 
 console = Console()
+warned_about_transformation = False
+logger = logging.getLogger("rmrf")
+
+
+class TransformationError(Exception):
+    pass
 
 
 @dataclass
 class Highlight:
     page_index: int
+    block_index: int | float
     tags: set[str]
 
 
@@ -55,7 +61,7 @@ def get_color(
 
 def get_limits(
     blocks: list[SceneLineItemBlock | SceneGlyphItemBlock | RootTextBlock],
-) -> tuple[int, int, int, int]:
+) -> tuple[int | None, int | None, int | None, int | None]:
     x_values = []
     y_values = []
     for block in blocks:
@@ -72,7 +78,7 @@ def get_limits(
             y_values.append(block.value.pos_y)
 
     if not x_values or not y_values:
-        return (0, 0, 0, 0)
+        return (None, None, None, None)
 
     return (min(x_values), min(y_values), max(x_values), max(y_values))
 
@@ -95,6 +101,8 @@ def is_rectangular(
     bool
         True if the block is close to a rectangle, False otherwise.
     """
+    if len(block.item.value.points) < 4:
+        return False
     polygon = Polygon([(p.x, p.y) for p in block.item.value.points])
     x_min, y_min, x_max, y_max = get_limits([block])
     rectangle = (x_max - x_min) * (y_max - y_min)
@@ -131,9 +139,15 @@ def get_transformation(
     tuple[int, int, int, int, float, float, Image.Image | None]
         The transformation matrix for the blocks, which is a tuple of the form (x_delta, y_delta, screen_width, screen_height, x_scale, y_scale, base_image).
     """
-    logger.warning("Transformation is highly experimental")
+    global warned_about_transformation
+    if not warned_about_transformation:
+        logger.warning("Transformation is highly experimental")
+        warned_about_transformation = True
 
     x_min, y_min, x_max, y_max = get_limits(blocks)
+    if x_min is None or y_min is None or x_max is None or y_max is None:
+        raise TransformationError("No points found in the blocks")
+
     logger.debug(f"{x_min=:.2f}, {y_min=:.2f}, {x_max=:.2f}, {y_max=:.2f}")
 
     if doc is not None and page_index is not None:
@@ -149,12 +163,14 @@ def get_transformation(
         image_width = None
         image_height = None
 
+    # screen_width = node.screen_width
     screen_width = node.zoom_width
+    # screen_height = node.screen_height
     screen_height = node.zoom_height
 
     logger.debug(f"{screen_width=:.2f}, {screen_height=:.2f}")
 
-    x_delta = screen_width / 2 + node.center_x
+    x_delta = screen_width / 2
     y_delta = abs(y_min) if y_min < 0 else 0
 
     while (
@@ -162,11 +178,11 @@ def get_transformation(
         or x_min + x_delta < 0
         or x_max + x_delta > screen_width
         or x_max > screen_width
-        or (x_delta - node.center_x) * 2 > screen_width
+        or x_delta * 2 > screen_width
     ):
         c1, r1 = abs(x_min) if x_min < 0 else 0, "Offsetting negative x"
         c2, r2 = x_delta, "x_delta"
-        c3, r3 = screen_width / 2 + node.center_x, "Screen width / 2 + center_x"
+        c3, r3 = screen_width / 2, "Screen width / 2"
 
         x_delta_ = max(c1, c2, c3)
 
@@ -177,7 +193,7 @@ def get_transformation(
 
         c1, r1 = math.ceil(x_max - x_min), "x_max - x_min"
         c2, r2 = screen_width, "screen_width"
-        c3, r3 = math.ceil((x_delta - node.center_x) * 2), "2 * (x_delta - center_x)"
+        c3, r3 = math.ceil(x_delta * 2), "2 * x_delta"
         c4, r4 = math.ceil(x_max + x_delta), "x_max + x_delta"
 
         screen_width_ = max(c1, c2, c3, c4)
@@ -247,23 +263,69 @@ def get_transformation(
 
 
 def extract_highlights(node: Node) -> list[Highlight]:
+    """
+    Extract highlights from the node.
+
+    Parameters
+    ----------
+    node: Node
+        The node to extract highlights from.
+
+    Returns
+    -------
+    list[Highlight]
+        The highlights extracted from the node.
+    """
     highlights: list[Highlight] = []
-    highlight_dir = node.source_dir / node.id
-    if not highlight_dir.exists():
+    if not node.rm_blocks:
         return highlights
 
     doc = node.doc
 
-    for rm_file in highlight_dir.glob("*.rm"):
-        basename = rm_file.name
-        page_id = basename.split(".")[0]
-        page_index = node.id2page.get(page_id, None)
-
+    for page_index, blocks in sorted(node.rm_blocks.items(), key=lambda x: x[0]):
         svg_blocks = []
+        cropping_blocks = []
 
-        with open(rm_file, "rb") as f:
-            blocks = list(read_blocks(f))
+        for block_idx, block in enumerate(blocks):
+            if not isinstance(block, node.valid_elements):
+                if isinstance(block, UnreadableBlock):
+                    logger.error(f"[red]{block}[/red]")
+                continue
 
+            if isinstance(block, RootTextBlock):
+                svg_blocks.append((block_idx, block, (0, 0, 0, 255)))
+                continue
+
+            if isinstance(block, SceneLineItemBlock) and block.item.value is None:
+                continue
+
+            if block.item.deleted_length > 0:
+                continue
+
+            # * If this is a highlight block, we don't need to draw it
+            if node.is_highlight_block(block):
+                highlights.append(
+                    TextHighlight(
+                        page_index=page_index or -1,
+                        block_index=block_idx,
+                        tags=node.page_tags.get(page_index, set()),
+                        text=block.item.value.text,
+                        color=get_color(block),
+                    )
+                )
+                continue
+
+            # * If this is not a handwriting block, we don't need to draw it
+            if not node.is_handwriting_block(block):
+                continue
+
+            # * test if the block is close to a rectangle
+            if is_rectangular(block):
+                cropping_blocks.append((block_idx, block))
+            else:
+                svg_blocks.append((block_idx, block, get_color(block)))
+
+        try:
             (
                 x_delta,
                 y_delta,
@@ -273,68 +335,31 @@ def extract_highlights(node: Node) -> list[Highlight]:
                 y_scale,
                 base_image,
             ) = get_transformation(node, blocks, doc, page_index)
+        except TransformationError as e:
+            logger.debug(f"Skipping page {page_index}: {e}")
 
-            for block in blocks:
-                if not isinstance(
-                    block, (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
-                ):
-                    if isinstance(block, UnreadableBlock):
-                        logger.error(f"[red]{block}[/red]")
-                    continue
-
-                if isinstance(block, RootTextBlock):
-                    svg_blocks.append((block, (0, 0, 0, 255)))
-                    continue
-
-                if isinstance(block, SceneLineItemBlock) and block.item.value is None:
-                    continue
-
-                if block.item.deleted_length > 0:
-                    continue
-
-                # * If this is a highlight block, we don't need to draw it
-                if node.is_highlight_block(block):
-                    highlights.append(
-                        TextHighlight(
-                            page_index=page_index or -1,
-                            tags=node.page_tags.get(page_index, set()),
-                            text=block.item.value.text,
-                            color=get_color(block),
-                        )
+        for block_idx, block in cropping_blocks:
+            x_min, y_min, x_max, y_max = get_limits([block])
+            cropped = base_image.crop(
+                (
+                    (x_min + x_delta) * x_scale,
+                    (y_min + y_delta) * y_scale,
+                    (x_max + x_delta) * x_scale,
+                    (y_max + y_delta) * y_scale,
+                )
+            )
+            with NamedTemporaryFile(
+                mode="wb", suffix=".png", delete=False, dir=node.cache_dir
+            ) as f:
+                cropped.save(f)
+                highlights.append(
+                    ImageHighlight(
+                        page_index=page_index,
+                        block_index=block_idx,
+                        tags=node.page_tags.get(page_index, set()),
+                        image_path=f.name,
                     )
-
-                    continue
-
-                # * If this is not a handwriting block, we don't need to draw it
-                if not node.is_handwriting_block(block):
-                    continue
-
-                color = get_color(block)
-                # * test if the block is close to a rectangle
-                if is_rectangular(block):
-                    x_min, y_min, x_max, y_max = get_limits([block])
-                    cropped = base_image.crop(
-                        (
-                            (x_min + x_delta) * x_scale,
-                            (y_min + y_delta) * y_scale,
-                            (x_max + x_delta) * x_scale,
-                            (y_max + y_delta) * y_scale,
-                        )
-                    )
-                    with NamedTemporaryFile(
-                        mode="wb", suffix=".png", delete=False, dir=node.cache_dir
-                    ) as f:
-                        cropped.save(f)
-                        highlights.append(
-                            ImageHighlight(
-                                page_index=page_index,
-                                tags=node.page_tags.get(page_index, set()),
-                                image_path=f.name,
-                            )
-                        )
-                        continue
-
-                svg_blocks.append((block, color))
+                )
 
         if svg_blocks:
             with NamedTemporaryFile(
@@ -343,7 +368,7 @@ def extract_highlights(node: Node) -> list[Highlight]:
                 margin = 0
 
                 blocks_to_svg(
-                    svg_blocks,
+                    [(block, color) for _, block, color in svg_blocks],
                     f,
                     xpos_shift=math.ceil(x_delta) + margin,
                     ypos_shift=math.ceil(y_delta) + margin,
@@ -358,9 +383,10 @@ def extract_highlights(node: Node) -> list[Highlight]:
                 highlights.append(
                     DrawingHighlight(
                         page_index=page_index,
+                        block_index=float("inf"),
                         tags=node.page_tags.get(page_index, set()),
                         image_path=f.name,
                     )
                 )
 
-    return sorted(highlights, key=lambda x: x.page_index)
+    return highlights
