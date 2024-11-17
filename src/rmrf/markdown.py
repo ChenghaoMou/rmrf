@@ -37,7 +37,8 @@ tags:
 
 # {original_title}
 
-{highlights}
+## Pages
+{pages}
 """
 
 Zotero_Template = """---
@@ -61,8 +62,8 @@ tags:
 ## Abstract
 {abstract}
 
-## Highlights
-{highlights}
+## Pages
+{pages}
 """
 
 Highlight_Template = """
@@ -126,7 +127,7 @@ class MarkdownWriter:
                         return False, last_modified, None
 
         highlights: list[Highlight] = extract_highlights(node)
-        highlight_text = []
+        page_text = []
         static_dir = self.static_dir / name
 
         if static_dir.exists():
@@ -177,7 +178,7 @@ class MarkdownWriter:
             else:
                 tag_content = ""
 
-            highlight_text.append(
+            page_text.append(
                 self.page_template.format(
                     page_index=page_index,
                     tags=tag_content,
@@ -207,13 +208,13 @@ class MarkdownWriter:
                         created=node.created_time,
                         updated=node.last_modified_time,
                         modified=datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f"),
-                        highlights="\n\n".join(highlight_text),
+                        pages="\n\n".join(page_text),
                         authors=zotero_item.authors,
                         url=zotero_item.url,
                         zotero_url=zotero_item.zotero_url,
                         abstract=zotero_item.abstract,
                     )
-                    if highlight_text:
+                    if page_text:
                         with open(f"{self.target_dir}/{name}.md", "w") as f:
                             f.write(note)
                         return True, last_modified, node.last_modified_time
@@ -225,9 +226,9 @@ class MarkdownWriter:
                 created=node.created_time,
                 updated=node.last_modified_time,
                 modified=datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f"),
-                highlights="\n\n".join(highlight_text),
+                pages="\n\n".join(page_text),
             )
-            if highlight_text:
+            if page_text:
                 with open(f"{self.target_dir}/{name}.md", "w") as f:
                     f.write(note)
                 return True, last_modified, node.last_modified_time

@@ -7,8 +7,8 @@ rmrf is a Python library for processing and converting reMarkable tablet files (
 
 ## Features
 
-- Only works locally with a reMarkable backup folder
-- Parse reMarkable file formats (v3 or v6 in terms of lines format)
+- Only works locally with a reMarkable backup folder (only RMPP is tested)
+- Parse reMarkable file formats (only v3 or v6 in terms of lines format is tested)
 - Extract highlights and annotations from reMarkable files and convert them into Markdown or SVG, ideally for Obsidian
 
 ## Installation
@@ -94,7 +94,8 @@ tags:
 
 # {original_title}
 
-{highlights}
+## Pages
+{pages}
 """
 
 Highlight_Template = """
@@ -107,6 +108,50 @@ Page_Template = """
 {tags}
 
 {highlights}
+"""
+```
+
+## Zotero Template
+
+To work with Zotero, you need to provide the following environment variables:
+
+```bash
+ZOTERO_USER_ID=""
+ZOTERO_LIB_KEY=""
+STORAGE_FOLDER="/Path/to/your/Zotero/storage"
+```
+
+For zotero template, you can use the following additional variables:
+
+- `authors`: the authors of the paper, joined by `, `
+- `url`: the url of the paper
+- `zotero_url`: the url of the zotero item
+- `abstract`: the abstract of the paper
+
+```python
+Zotero_Template = """---
+title: "{title}"
+alias:
+  - "{alias}"
+created: {created}
+updated: {updated}
+modified: {modified}
+authors: {authors}
+url: {url}
+zotero_url: {zotero_url}
+tags:
+  - reMarkable
+---
+
+# {original_title}
+
+[Open in Zotero]({zotero_url})
+
+## Abstract
+{abstract}
+
+## Pages
+{pages}
 """
 ```
 
