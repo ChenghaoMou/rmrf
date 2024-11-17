@@ -64,6 +64,14 @@ class Node:
     @property
     def orientation(self):
         return self.metadata["orientation"]
+    
+    @property
+    def is_portrait(self):
+        return self.orientation == "portrait"
+    
+    @property
+    def is_landscape(self):
+        return self.orientation == "landscape"
 
     @property
     def zoom_mode(self):

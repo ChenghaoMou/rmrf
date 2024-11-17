@@ -9,14 +9,14 @@ rmrf is a Python library for processing and converting reMarkable tablet files (
 
 - Only works locally with a reMarkable backup folder
 - Parse reMarkable file formats (v3 or v6 in terms of lines format)
-- Extract highlights and annotations from reMarkable files and convert them into Markdown or SVG
+- Extract highlights and annotations from reMarkable files and convert them into Markdown or SVG, ideally for Obsidian
 
 ## Installation
 
 To install rmrf, you need Python 3.10 or later. You can install it using pip:
 
 ```bash
-pip install rmrf
+pip install git+https://github.com/ChenghaoMou/rmrf.git
 ```
 
 ## Usage
@@ -29,8 +29,8 @@ from rmrf.markdown import Highlight_Template, Page_Template, Template
 
 BACKUP_DIR = Path("path to your reMarkable backup folder locally")
 CACHE_DIR = Path("path to your cache folder locally")
-TARGET_DIR = Path("path to your target folder locally")
-STATIC_DIR = Path("path to your static folder locally")
+TARGET_DIR = Path("path to your target obsidian folder locally")
+STATIC_DIR = Path("path to your obsidian static folder locally")
 
 fs = FileSystem(BACKUP_DIR, CACHE_DIR)
 writer = MarkdownWriter(
@@ -48,7 +48,7 @@ update(
     fs=fs,
     prefix="/Root/Papers",
     writer=writer,
-    force=True,
+    force=True,  # overwrite existing files
 )
 ```
 
@@ -125,7 +125,7 @@ This is what you get after exporting to SVG:
 ![Exported SVG](./static/export2.png)
 
 1. For PDF or EPub files
-   1. you can draw a box to crop out a part of the page. It will be embedded in the markdown as an image. (See the first set of screenshots above) (This is differentiated from handwriting by some crude heuristics)
+   1. you can draw a box (in one stroke) to crop out a part of the page. It will be embedded in the markdown as an image. (See the first set of screenshots above) (This is differentiated from handwriting by some crude heuristics, which means you *can't* draw box-adjacent shapes freely as they will create multiple cropped images)
    2. highlights will be rendered in markdown as `<mark>` tags.
    3. Handwriting is exported as SVG for annotated pages.
 2. Typed text may **interfere** with the rendering with misalignment. They may have **incorrect styles**, though I try to preserve as much as possible. (See the second set of screenshots above)
@@ -145,3 +145,7 @@ This project is based on various open-source projects and research into the reMa
 - [maxio](https://github.com/lschwetlick/maxio)
 - [rmc](https://github.com/ricklupton/rmc)
 - [rmscene](https://github.com/ricklupton/rmscene)
+
+## Sponsors
+
+This project is supported by [@Azeirah](https://github.com/Azeirah) who created the [Scrybble](https://scrybble.ink/) project. If you want to export your reMarkable highlights to Obsidian without any technical setup, feel free to check it out!

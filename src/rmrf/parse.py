@@ -204,6 +204,11 @@ def get_transformation(
             screen_height = screen_height * screen_width_ / screen_width
 
         screen_width = screen_width_
+    
+    assert x_max + x_delta <= screen_width, f"{x_max=:.2f}, {x_delta=:.2f}, {screen_width=:.2f}"
+    assert x_min + x_delta >= 0, f"{x_min=:.2f}, {x_delta=:.2f}"
+    assert x_max - x_min <= screen_width, f"{x_max=:.2f}, {x_min=:.2f}, {screen_width=:.2f}"
+    
 
     while (
         y_max - y_min > screen_height
@@ -232,21 +237,21 @@ def get_transformation(
         if screen_height_ != screen_height:
             reason = [r1, r2, r3, r4][[c1, c2, c3, c4].index(screen_height_)]
             logger.warning(f"{screen_height=:.2f} -> {screen_height_=:.2f} ({reason})")
-            screen_width = screen_width * screen_height_ / screen_height
+            screen_width = max(
+                screen_width * screen_height_ / screen_height,
+                screen_width,
+            )
 
         screen_height = screen_height_
 
     screen_width = math.ceil(screen_width)
     screen_height = math.ceil(screen_height)
-    x_delta = math.ceil(x_delta)
-    y_delta = math.ceil(y_delta)
+    # x_delta = math.ceil(x_delta)
+    # y_delta = math.ceil(y_delta)
 
-    assert x_max + x_delta <= screen_width
-    assert x_min + x_delta >= 0
-    assert x_max - x_min <= screen_width
-    assert y_max + y_delta <= screen_height
-    assert y_min + y_delta >= 0
-    assert y_max - y_min <= screen_height
+    assert y_max + y_delta <= screen_height, f"{y_max=:.2f}, {y_delta=:.2f}, {screen_height=:.2f}"
+    assert y_min + y_delta >= 0, f"{y_min=:.2f}, {y_delta=:.2f}"
+    assert y_max - y_min <= screen_height, f"{y_max=:.2f}, {y_min=:.2f}, {screen_height=:.2f}"
 
     if base_image is not None:
         x_scale = image_width / screen_width
@@ -338,28 +343,33 @@ def extract_highlights(node: Node) -> list[Highlight]:
         except TransformationError as e:
             logger.debug(f"Skipping page {page_index}: {e}")
 
-        for block_idx, block in cropping_blocks:
-            x_min, y_min, x_max, y_max = get_limits([block])
-            cropped = base_image.crop(
-                (
-                    (x_min + x_delta) * x_scale,
-                    (y_min + y_delta) * y_scale,
-                    (x_max + x_delta) * x_scale,
-                    (y_max + y_delta) * y_scale,
-                )
-            )
-            with NamedTemporaryFile(
-                mode="wb", suffix=".png", delete=False, dir=node.cache_dir
-            ) as f:
-                cropped.save(f)
-                highlights.append(
-                    ImageHighlight(
-                        page_index=page_index,
-                        block_index=block_idx,
-                        tags=node.page_tags.get(page_index, set()),
-                        image_path=f.name,
+        if cropping_blocks and base_image:
+            
+            for block_idx, block in cropping_blocks:
+                x_min, y_min, x_max, y_max = get_limits([block])
+                cropped = base_image.crop(
+                    (
+                        (x_min + x_delta) * x_scale,
+                        (y_min + y_delta) * y_scale,
+                        (x_max + x_delta) * x_scale,
+                        (y_max + y_delta) * y_scale,
                     )
                 )
+                with NamedTemporaryFile(
+                    mode="wb", suffix=".png", delete=False, dir=node.cache_dir
+                ) as f:
+                    cropped.save(f)
+                    highlights.append(
+                        ImageHighlight(
+                            page_index=page_index,
+                            block_index=block_idx,
+                            tags=node.page_tags.get(page_index, set()),
+                            image_path=f.name,
+                        )
+                    )
+
+        elif cropping_blocks and not base_image:
+            svg_blocks.extend([(block_idx, block, get_color(block)) for block_idx, block in cropping_blocks])
 
         if svg_blocks:
             with NamedTemporaryFile(

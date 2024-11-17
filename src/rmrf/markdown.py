@@ -105,7 +105,7 @@ class MarkdownWriter:
         last_modified: str | None = None
 
         # * Read the old content if the file exists and check the dates
-        if os.path.exists(f"{self.target_dir}/{name}.md"):
+        if not force and os.path.exists(f"{self.target_dir}/{name}.md"):
             with open(f"{self.target_dir}/{name}.md", "r") as f:
                 old_content = f.read()
                 last_modified = re.search(
