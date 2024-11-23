@@ -144,7 +144,7 @@ def draw_stroke(
         ), f"xpos: {xpos} width: {svg_doc_info.width}"
         assert (
             0 <= ypos <= svg_doc_info.height
-        ), f"ypos: {ypos} height: {svg_doc_info.height}"
+        ), f"ypos: {ypos} height: {svg_doc_info.height} {point.y=}, {svg_doc_info.ypos_delta=}, {y_scale=}"
 
         if point_id % pen.segment_length == 0:
             segment_width = pen.get_segment_width(
@@ -217,9 +217,12 @@ def draw_text(
     ypos = (block.value.pos_y + svg_doc_info.ypos_delta) * y_scale
 
     newlines = 0
+    py = None
+    # A block of text can have multiple lines with different styles
     for text_item in block.value.items.sequence_items():
         self_style = block.value.styles.get(text_item.item_id, None)
         left_style = block.value.styles.get(text_item.left_id, None)
+
         style_class = "plain"
         if self_style is not None:
             style_class = ParagraphStyle(self_style.value).name.lower()
@@ -241,24 +244,30 @@ def draw_text(
             margin = 50
 
         started = False
+        before_newlines = newlines
 
-        for part in text_item.value.split("\n"):
+        for i, part in enumerate(text_item.value.split("\n")):
             if started:
                 newlines += 1
+
             if not part:
                 continue
 
-            if margin:
-                dy = 0
-            else:
-                dy = newlines / 2
+            # * this text is decorated so we don't adjust the y-position
+            dy = before_newlines if margin != 0 else newlines
+            if py is None:
+                py = dy
+            delta = dy - py
+            py = dy
 
             if not started:
                 started = True
-                content += f"<tspan x='{xpos + margin}' dy='{dy}em' class='{style_class}'>{part}</tspan>"
+                content += f"<tspan x='{xpos + margin}' dy='{delta}em' class='{style_class}' part_index='{i}'>{part}</tspan>"
             else:
                 newlines += 1
-                content += f"<tspan x='{xpos + margin}' dy='{dy}em' class='{style_class}'>{part}</tspan>"
+                content += f"<tspan x='{xpos + margin}' dy='{delta}em' class='{style_class}' part_index='{i}'>{part}</tspan>"
+
+        newlines += 1
 
     output_text += f"<!-- RootTextBlock item_id: {block.block_id} -->"
     if content:
@@ -336,3 +345,112 @@ def get_dimensions(
     return SvgDocInfo(
         height=height, width=width, xpos_delta=xpos_delta, ypos_delta=ypos_delta
     )
+
+
+if __name__ == "__main__":
+    import argparse
+    from pathlib import Path
+
+    from rmscene import UnreadableBlock, read_blocks
+
+    from rmrf.parse import (
+        Node,
+        TransformationError,
+        get_color,
+        get_limits,
+        get_transformation,
+    )
+
+    logging.basicConfig(level=logging.ERROR)
+
+    def convert_rm_to_svg(input_rm: str, output_svg: str):
+        blocks = list(read_blocks(open(input_rm, "rb")))
+        svg_blocks = []
+        node = Node(
+            id="dummy",
+            metadata={
+                "customZoomPageWidth": 1404,
+                "customZoomPageHeight": 1872,
+                "customZoomCenterY": 936,
+            },
+            source_dir=".",
+            cache_dir=".",
+        )
+        for block_idx, block in enumerate(blocks):
+            if not isinstance(block, node.valid_elements):
+                if isinstance(block, UnreadableBlock):
+                    logger.error(f"[red]{block}[/red]")
+                continue
+
+            if isinstance(block, RootTextBlock):
+                svg_blocks.append((block_idx, block, (0, 0, 0, 255)))
+                continue
+
+            if isinstance(block, SceneLineItemBlock) and block.item.value is None:
+                continue
+
+            if block.item.deleted_length > 0:
+                continue
+
+            # * If this is a highlight block, we don't need to draw it
+            if Node.is_highlight_block(block):
+                continue
+
+            # * If this is not a handwriting block, we don't need to draw it
+            if not Node.is_handwriting_block(block):
+                continue
+
+            svg_blocks.append((block_idx, block, get_color(block)))
+
+        try:
+            (
+                x_delta,
+                y_delta,
+                screen_width,
+                screen_height,
+                x_scale,
+                y_scale,
+                base_image,
+            ) = get_transformation(
+                node,
+                blocks,
+            )
+        except TransformationError as e:
+            logger.debug(f"Skipping page : {e}")
+
+        if svg_blocks:
+            with open(output_svg, "w") as f:
+                margin = 0
+
+                blocks_to_svg(
+                    [(block, color) for _, block, color in svg_blocks],
+                    f,
+                    xpos_shift=x_delta + margin,
+                    ypos_shift=y_delta + margin,
+                    screen_width=screen_width + margin * 2,
+                    screen_height=screen_height + margin * 2,
+                    base_image=base_image,
+                    margin=margin,
+                    x_scale=x_scale,
+                    y_scale=y_scale,
+                )
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_rm", help="input rm file", type=str)
+    parser.add_argument("--input_dir", help="input directory", type=str)
+    parser.add_argument("--output_svg", help="output svg file", type=str)
+    parser.add_argument("--output_dir", help="output directory", type=str)
+    args = parser.parse_args()
+
+    if args.input_rm:
+        convert_rm_to_svg(args.input_rm, args.output_svg)
+    elif args.input_dir and args.output_dir:
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for file in Path(args.input_dir).glob("*.rm"):
+            output_file = output_dir / f"{file.stem}.svg"
+            # try:
+            convert_rm_to_svg(file, output_file)
+            # except Exception as e:
+            #     logger.error(f"Error converting {file} to {output_file}: {e}")

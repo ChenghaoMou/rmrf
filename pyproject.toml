@@ -7,12 +7,13 @@ requires-python = ">=3.10"
 dependencies = [
     "rich>=13.9.3",
     "pymupdf>=1.24.12",
-    "rmscene",
     "python-dotenv>=1.0.1",
     "pyzotero>=1.5.25",
     "pillow>=11.0.0",
     "shapely>=2.0.6",
     "diskcache>=5.6.3",
+    "rmscene",
+    "jinja2>=3.1.4",
 ]
 
 [build-system]
@@ -27,4 +28,4 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-rmscene = { git = "https://github.com/ChenghaoMou/rmscene.git" }
+rmscene = { path = "../rmscene", editable = true }

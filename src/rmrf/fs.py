@@ -25,9 +25,9 @@ class Node:
     children: list["Node"] = field(default_factory=list)
 
     def __post_init__(self):
-        self.read_page_map()
         self.source_dir = Path(self.source_dir)
         self.cache_dir = Path(self.cache_dir)
+        self.read_page_map()
 
     def read_page_map(self):
         self.page_scroll = defaultdict(int)
@@ -64,11 +64,11 @@ class Node:
     @property
     def orientation(self):
         return self.metadata["orientation"]
-    
+
     @property
     def is_portrait(self):
         return self.orientation == "portrait"
-    
+
     @property
     def is_landscape(self):
         return self.orientation == "landscape"

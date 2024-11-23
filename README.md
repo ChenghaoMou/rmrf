@@ -9,7 +9,7 @@ rmrf is a Python library for processing and converting reMarkable tablet files (
 
 - Only works locally with a reMarkable backup folder (only RMPP is tested)
 - Parse reMarkable file formats (only v3 or v6 in terms of lines format is tested)
-- Extract highlights and annotations from reMarkable files and convert them into Markdown or SVG, ideally for Obsidian
+- Extract highlights and annotations from reMarkable files and convert them into Markdown or SVG, ideally for Obsidian with **Jinja** templates
 
 ## Installation
 
@@ -25,12 +25,13 @@ Here's a basic example of how to use rmrf:
 
 ```python
 from rmrf import FileSystem, MarkdownWriter, update, paper_title_getter
-from rmrf.markdown import Highlight_Template, Page_Template, Template
 
 BACKUP_DIR = Path("path to your reMarkable backup folder locally")
 CACHE_DIR = Path("path to your cache folder locally")
 TARGET_DIR = Path("path to your target obsidian folder locally")
 STATIC_DIR = Path("path to your obsidian static folder locally")
+
+TEMPLATE = Path("path to your jinja template")
 
 fs = FileSystem(BACKUP_DIR, CACHE_DIR)
 writer = MarkdownWriter(
@@ -38,9 +39,8 @@ writer = MarkdownWriter(
     static_dir=STATIC_DIR,
     cache_dir=CACHE_DIR,
     title_getter=paper_title_getter,
-    file_template=Template,
-    highlight_template=Highlight_Template,
-    page_template=Page_Template,
+    template=TEMPLATE,
+    enable_zotero=False,
 )
 # Parse papers from the reMarkable backup folder 
 # and export to Markdown in the target folder
@@ -52,31 +52,141 @@ update(
 )
 ```
 
-## Templating Variables
+## Template
 
-For file template, you can use the following variables:
+<details>
 
-- `original_title`: the original title of the file
-- `title`: the title of the file, escaped for markdown
-- `alias`: the same as the original title
-- `created`: the creation time of the file
-- `updated`: the last modified time of the paper on reMarkable
-- `modified`: the current time in `%Y-%m-%d %H:%M:%S:%f` format
-- `highlights`: the highlights of the file, joined by `\n\n`
+<summary>Default Template</summary>
 
-For highlight template, you can use the following variables:
+```markdown
+---
+title: "{{ title | default('Untitled') }}"
+{%- if alias is defined and alias %}
+alias:
+- "{{ alias }}"
+{%- endif %}
+{%- if created is defined and created %}
+created: {{ created }}
+{%- endif %}
+{%- if updated is defined and updated %}
+updated: {{ updated }}
+{%- endif %}
+{%- if modified is defined and modified %}
+modified: {{ modified }}
+{%- endif %}
+tags:
+- reMarkable
+---
 
-- `text`: the text of the highlight
-- `r`: the red component of the highlight color
-- `g`: the green component of the highlight color
-- `b`: the blue component of the highlight color
-- `page_index`: the page number of the highlight
+# {{ original_title | default(title) }}
 
-For page template, you can use the following variables:
+{%- if pages is defined and pages %}
+## Pages
 
-- `page_number`: the page number of the page
-- `tags`: the tags of the page, joined by `, ` (this includes the prefix `tags:` so it is not present if there are no tags)
-- `highlights`: the highlights of the page
+{%- for page_idx, tags, highlights in pages %}
+### Page {{ page_idx }}
+
+{%- if tags %}
+**Tags**: {{ tags | join(', ') }}
+{%- endif %}
+{%- if highlights %}
+**Highlights**:
+{% for highlight in highlights %}
+{%- if highlight is string %}
+{{ highlight }}
+{%- else %}
+{%- if highlight|length == 5 %}
+{%- set r, g, b, a, text = highlight %}
+<mark style="background-color: rgba({{ r }}, {{ g }}, {{ b }}, {{ a }})">{{ text }}</mark>
+{%- else %}
+{{ highlight }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+{%- endfor %}
+{%- endif %}
+```
+
+</details>
+
+<details>
+
+<summary>Zotero Template</summary>
+
+```markdown
+---
+title: "{{ title | default('Untitled') }}"
+{%- if alias is defined and alias %}
+alias:
+- "{{ alias }}"
+{%- endif %}
+{%- if created is defined and created %}
+created: {{ created }}
+{%- endif %}
+{%- if updated is defined and updated %}
+updated: {{ updated }}
+{%- endif %}
+{%- if modified is defined and modified %}
+modified: {{ modified }}
+{%- endif %}
+{%- if authors is defined and authors %}
+authors: {{ authors }}
+{%- endif %}
+{%- if url is defined and url %}
+url: {{ url }}
+{%- endif %}
+{%- if zotero_url is defined and zotero_url %}
+zotero_url: {{ zotero_url }}
+{%- endif %}
+tags:
+- reMarkable
+---
+
+# {{ original_title | default(title) }}
+
+{%- if zotero_url is defined and zotero_url %}
+[Open in Zotero]({{ zotero_url }})
+{%- endif %}
+
+{%- if abstract is defined and abstract %}
+## Abstract
+
+{{ abstract }}
+{%- endif %}
+
+{%- if pages is defined and pages %}
+## Pages
+
+{%- for page_idx, tags, highlights in pages %}
+### Page {{ page_idx }}
+
+{%- if tags %}
+**Tags**: {{ tags | join(', ') }}
+{%- endif %}
+
+{%- if highlights %}
+**Highlights**:
+{% for highlight in highlights %}
+{%- if highlight is string %}
+{{ highlight }}
+{%- else %}
+{%- if highlight|length == 5 %}
+{%- set r, g, b, a, text = highlight %}
+<mark style="background-color: rgba({{ r }}, {{ g }}, {{ b }}, {{ a }})">{{ text }}</mark>
+{%- else %}
+{{ highlight }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+{%- endfor %}
+{%- endif %}
+```
+
+</details>
 
 ### Default Templates
 
@@ -123,7 +233,7 @@ STORAGE_FOLDER="/Path/to/your/Zotero/storage"
 
 For zotero template, you can use the following additional variables:
 
-- `authors`: the authors of the paper, joined by `, `
+- `authors`: the authors of the paper, joined by `,`
 - `url`: the url of the paper
 - `zotero_url`: the url of the zotero item
 - `abstract`: the abstract of the paper

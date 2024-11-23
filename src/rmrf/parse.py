@@ -9,6 +9,7 @@ from rich.console import Console
 from rmscene import (
     RootTextBlock,
     SceneGlyphItemBlock,
+    SceneInfo,
     SceneLineItemBlock,
     UnreadableBlock,
 )
@@ -294,7 +295,7 @@ def extract_highlights(node: Node) -> list[Highlight]:
         for block_idx, block in enumerate(blocks):
             if not isinstance(block, node.valid_elements):
                 if isinstance(block, UnreadableBlock):
-                    logger.error(f"[red]{block}[/red]")
+                    logger.error(f"{block}")
                 continue
 
             if isinstance(block, RootTextBlock):
@@ -380,8 +381,8 @@ def extract_highlights(node: Node) -> list[Highlight]:
                 blocks_to_svg(
                     [(block, color) for _, block, color in svg_blocks],
                     f,
-                    xpos_shift=math.ceil(x_delta) + margin,
-                    ypos_shift=math.ceil(y_delta) + margin,
+                    xpos_shift=x_delta + margin,
+                    ypos_shift=y_delta + margin,
                     screen_width=screen_width + margin * 2,
                     screen_height=screen_height + margin * 2,
                     base_image=base_image,

@@ -9,6 +9,7 @@ from itertools import groupby
 from pathlib import Path
 from typing import Callable
 
+from jinja2 import Template
 from rich.console import Console
 from rich.tree import Tree
 
@@ -24,60 +25,6 @@ from .zotero_helper import find_zotero_item
 console = Console()
 logger = logging.getLogger("rmrf")
 
-Template = """---
-title: "{title}"
-alias:
-  - "{alias}"
-created: {created}
-updated: {updated}
-modified: {modified}
-tags:
-  - reMarkable
----
-
-# {original_title}
-
-## Pages
-{pages}
-"""
-
-Zotero_Template = """---
-title: "{title}"
-alias:
-  - "{alias}"
-created: {created}
-updated: {updated}
-modified: {modified}
-authors: {authors}
-url: {url}
-zotero_url: {zotero_url}
-tags:
-  - reMarkable
----
-
-# {original_title}
-
-[Open in Zotero]({zotero_url})
-
-## Abstract
-{abstract}
-
-## Pages
-{pages}
-"""
-
-Highlight_Template = """
-<mark style="background-color: #{r:02x}{g:02x}{b:02x};">{text}</mark>
-"""
-
-Page_Template = """
-## Page {page_index}
-
-{tags}
-
-{highlights}
-"""
-
 
 class MarkdownWriter:
     def __init__(
@@ -86,18 +33,14 @@ class MarkdownWriter:
         static_dir: str,
         cache_dir: str,
         title_getter: Callable[[str], str],
-        file_template: str = Template,
-        highlight_template: str = Highlight_Template,
-        page_template: str = Page_Template,
+        template: str | Path,
         enable_zotero: bool = False,
     ):
         self.target_dir = Path(target_dir)
         self.static_dir = Path(static_dir)
         self.cache_dir = Path(cache_dir)
         self.title_getter = title_getter
-        self.file_template = file_template
-        self.highlight_template = highlight_template
-        self.page_template = page_template
+        self.template = Template(Path(template).read_text())
         self.enable_zotero = enable_zotero
 
     def update(self, node: Node, force=False):
@@ -127,7 +70,7 @@ class MarkdownWriter:
                         return False, last_modified, None
 
         highlights: list[Highlight] = extract_highlights(node)
-        page_text = []
+        pages = []
         static_dir = self.static_dir / name
 
         if static_dir.exists():
@@ -142,7 +85,7 @@ class MarkdownWriter:
             sorted(highlights, key=lambda x: x.page_index),
             key=lambda x: x.page_index,
         ):
-            page_highlights = []
+            highlights = []
 
             for highlight in group:
                 if isinstance(highlight, ImageHighlight):
@@ -155,36 +98,29 @@ class MarkdownWriter:
                     assert os.path.exists(
                         static_dir / base_name
                     ), f"static file {static_dir / base_name} does not exist"
-                    page_highlights.append(
+                    highlights.append(
                         f"![Image (page {page_index})](statics/{os.path.join(name, base_name)})"
                     )
                     # remove the image file
                     os.remove(highlight.image_path)
                 elif isinstance(highlight, TextHighlight):
-                    page_highlights.append(
-                        self.highlight_template.format(
-                            text=highlight.text,
-                            r=highlight.color[0],
-                            g=highlight.color[1],
-                            b=highlight.color[2],
-                            page_index=page_index,
-                        )
+                    highlights.append(
+                        # self.highlight_template.format(
+                        #     text=highlight.text,
+                        #     r=highlight.color[0],
+                        #     g=highlight.color[1],
+                        #     b=highlight.color[2],
+                        #     page_index=page_index,
+                        # )
+                        (*highlight.color, highlight.text)
                     )
 
             if highlight.tags:
-                tag_content = "tags: " + ", ".join(
-                    f"#{tag.replace(' ', '_')}" for tag in highlight.tags
-                )
+                tags = highlight.tags
             else:
-                tag_content = ""
+                tags = []
 
-            page_text.append(
-                self.page_template.format(
-                    page_index=page_index,
-                    tags=tag_content,
-                    highlights="\n".join(page_highlights),
-                )
-            )
+            pages.append((page_index, tags, highlights))
 
         try:
             original_title = self.title_getter(node.name)
@@ -201,34 +137,34 @@ class MarkdownWriter:
                         f"Found Zotero item for [yellow]{original_title}[/yellow]",
                         extra={"markup": True},
                     )
-                    note = Zotero_Template.format(
+                    note = self.template.render(
                         original_title=original_title,
                         title=title,
                         alias=title,
                         created=node.created_time,
                         updated=node.last_modified_time,
                         modified=datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f"),
-                        pages="\n\n".join(page_text),
+                        pages=pages,
                         authors=zotero_item.authors,
                         url=zotero_item.url,
                         zotero_url=zotero_item.zotero_url,
                         abstract=zotero_item.abstract,
                     )
-                    if page_text:
+                    if pages:
                         with open(f"{self.target_dir}/{name}.md", "w") as f:
                             f.write(note)
                         return True, last_modified, node.last_modified_time
 
-            note = self.file_template.format(
+            note = self.template.render(
                 original_title=original_title,
                 title=title,
                 alias=title,
                 created=node.created_time,
                 updated=node.last_modified_time,
                 modified=datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f"),
-                pages="\n\n".join(page_text),
+                pages=pages,
             )
-            if page_text:
+            if pages:
                 with open(f"{self.target_dir}/{name}.md", "w") as f:
                     f.write(note)
                 return True, last_modified, node.last_modified_time
