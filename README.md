@@ -54,6 +54,8 @@ update(
 
 ## Template
 
+### Default Template
+
 <details>
 
 <summary>Default Template</summary>
@@ -110,6 +112,16 @@ tags:
 ```
 
 </details>
+
+### Zotero Template
+
+To work with Zotero, you need to provide the following environment variables:
+
+```bash
+ZOTERO_USER_ID=""
+ZOTERO_LIB_KEY=""
+STORAGE_FOLDER="/Path/to/your/Zotero/storage"
+```
 
 <details>
 
@@ -187,83 +199,6 @@ tags:
 ```
 
 </details>
-
-### Default Templates
-
-```python
-Template = """---
-title: "{title}"
-alias:
-  - "{alias}"
-created: {created}
-updated: {updated}
-modified: {modified}
-tags:
-  - reMarkable
----
-
-# {original_title}
-
-## Pages
-{pages}
-"""
-
-Highlight_Template = """
-<mark style="background-color: #{r:02x}{g:02x}{b:02x};">{text}</mark>
-"""
-
-Page_Template = """
-## Page {page_index}
-
-{tags}
-
-{highlights}
-"""
-```
-
-## Zotero Template
-
-To work with Zotero, you need to provide the following environment variables:
-
-```bash
-ZOTERO_USER_ID=""
-ZOTERO_LIB_KEY=""
-STORAGE_FOLDER="/Path/to/your/Zotero/storage"
-```
-
-For zotero template, you can use the following additional variables:
-
-- `authors`: the authors of the paper, joined by `,`
-- `url`: the url of the paper
-- `zotero_url`: the url of the zotero item
-- `abstract`: the abstract of the paper
-
-```python
-Zotero_Template = """---
-title: "{title}"
-alias:
-  - "{alias}"
-created: {created}
-updated: {updated}
-modified: {modified}
-authors: {authors}
-url: {url}
-zotero_url: {zotero_url}
-tags:
-  - reMarkable
----
-
-# {original_title}
-
-[Open in Zotero]({zotero_url})
-
-## Abstract
-{abstract}
-
-## Pages
-{pages}
-"""
-```
 
 ## Annotation Conventions
 

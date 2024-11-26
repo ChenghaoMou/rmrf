@@ -25,6 +25,8 @@ dev-dependencies = [
     "streamlit>=1.22.0",
     "matplotlib>=3.9.2",
     "pillow>=11.0.0",
+    "gradio>=3.36.1",
+    "setuptools>=75.6.0",
 ]
 
 [tool.uv.sources]
