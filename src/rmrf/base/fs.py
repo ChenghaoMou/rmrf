@@ -14,7 +14,7 @@ logger = logging.getLogger("rmrf")
 
 
 @dataclass
-class Node:
+class File:
     id: str
     metadata: dict
     source_dir: Path | str
@@ -23,7 +23,7 @@ class Node:
     id2page: dict[str, int] = field(default_factory=dict)
     page_tags: dict[int, set[str]] = field(default_factory=dict)
     page_scroll: dict[int, int] = field(default_factory=dict)
-    children: list["Node"] = field(default_factory=list)
+    children: list["File"] = field(default_factory=list)
 
     def __post_init__(self):
         self.source_dir = Path(self.source_dir)
@@ -98,12 +98,10 @@ class Node:
     @property
     def screen_height(self):
         return 2160
-        # return 1872
 
     @property
     def screen_width(self):
         return 1620
-        # return 1404
 
     @property
     def zoom_height(self):
@@ -200,26 +198,30 @@ class Node:
         return (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
 
 
+@dataclass
 class FileSystem:
-    def __init__(self, source_dir: str, cache_dir: str):
-        self.source_dir = Path(source_dir)
-        self.cache_dir = Path(cache_dir)
+    source_dir: str | Path
+    cache_dir: str | Path
+
+    def __post_init__(self):
+        self.source_dir = Path(self.source_dir)
+        self.cache_dir = Path(self.cache_dir)
         user_home = Path.home()
         logger.info(
             f"Initializing with ~/{str(self.source_dir.relative_to(user_home))} and ~/{str(self.cache_dir.relative_to(user_home))}"
         )
-        self.root = Node(
+        self.root = File(
             "root",
             {"visibleName": "Root", "type": "CollectionType"},
-            source_dir,
-            cache_dir,
+            self.source_dir,
+            self.cache_dir,
         )
         self.nodes = {}
         file_ids = self.read_file_ids()
         self.parse_hierarchy(file_ids)
 
     def add_node(self, node_id, metadata):
-        node = Node(node_id, metadata, self.source_dir, self.cache_dir)
+        node = File(node_id, metadata, self.source_dir, self.cache_dir)
         if node.deleted:
             return
         self.nodes[node_id] = node
@@ -268,3 +270,24 @@ class FileSystem:
                 continue
             file_ids.add(file_id)
         return file_ids
+
+
+@dataclass
+class Highlight:
+    page_index: int
+    block_index: int | float
+    tags: set[str]
+
+
+@dataclass
+class TextHighlight(Highlight):
+    text: str
+    color: tuple[int, int, int, int]
+
+
+@dataclass
+class ImageHighlight(Highlight):
+    image_path: str
+
+
+DrawingHighlight = ImageHighlight

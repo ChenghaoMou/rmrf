@@ -1,6 +1,5 @@
 import logging
 import math
-from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 
 import fitz
@@ -14,9 +13,9 @@ from rmscene import (
 )
 from shapely.geometry import Polygon
 
-from rmrf.export.svg import blocks_to_svg
-from rmrf.fs import Node
-from rmrf.utils.writing_tools import remarkable_palette
+from rmrf.base import DrawingHighlight, File, Highlight, ImageHighlight, TextHighlight
+from rmrf.export import blocks_to_svg
+from rmrf.utils import remarkable_palette
 
 console = Console()
 warned_about_transformation = False
@@ -25,27 +24,6 @@ logger = logging.getLogger("rmrf")
 
 class TransformationError(Exception):
     pass
-
-
-@dataclass
-class Highlight:
-    page_index: int
-    block_index: int | float
-    tags: set[str]
-
-
-@dataclass
-class TextHighlight(Highlight):
-    text: str
-    color: tuple[int, int, int, int]
-
-
-@dataclass
-class ImageHighlight(Highlight):
-    image_path: str
-
-
-DrawingHighlight = ImageHighlight
 
 
 def get_color(
@@ -112,7 +90,7 @@ def is_rectangular(
 
 
 def get_transformation(
-    node: Node,
+    node: File,
     blocks: list[SceneLineItemBlock | SceneGlyphItemBlock | RootTextBlock],
     doc: fitz.Document | None = None,
     page_index: int | None = None,
@@ -204,11 +182,14 @@ def get_transformation(
             screen_height = screen_height * screen_width_ / screen_width
 
         screen_width = screen_width_
-    
-    assert x_max + x_delta <= screen_width, f"{x_max=:.2f}, {x_delta=:.2f}, {screen_width=:.2f}"
+
+    assert (
+        x_max + x_delta <= screen_width
+    ), f"{x_max=:.2f}, {x_delta=:.2f}, {screen_width=:.2f}"
     assert x_min + x_delta >= 0, f"{x_min=:.2f}, {x_delta=:.2f}"
-    assert x_max - x_min <= screen_width, f"{x_max=:.2f}, {x_min=:.2f}, {screen_width=:.2f}"
-    
+    assert (
+        x_max - x_min <= screen_width
+    ), f"{x_max=:.2f}, {x_min=:.2f}, {screen_width=:.2f}"
 
     while (
         y_max - y_min > screen_height
@@ -249,9 +230,13 @@ def get_transformation(
     # x_delta = math.ceil(x_delta)
     # y_delta = math.ceil(y_delta)
 
-    assert y_max + y_delta <= screen_height, f"{y_max=:.2f}, {y_delta=:.2f}, {screen_height=:.2f}"
+    assert (
+        y_max + y_delta <= screen_height
+    ), f"{y_max=:.2f}, {y_delta=:.2f}, {screen_height=:.2f}"
     assert y_min + y_delta >= 0, f"{y_min=:.2f}, {y_delta=:.2f}"
-    assert y_max - y_min <= screen_height, f"{y_max=:.2f}, {y_min=:.2f}, {screen_height=:.2f}"
+    assert (
+        y_max - y_min <= screen_height
+    ), f"{y_max=:.2f}, {y_min=:.2f}, {screen_height=:.2f}"
 
     if base_image is not None:
         x_scale = image_width / screen_width
@@ -260,14 +245,16 @@ def get_transformation(
         screen_width = math.ceil(max(screen_width * x_scale, image_width))
         screen_height = math.ceil(max(screen_height * y_scale, image_height))
 
-        # logger.warning(f"final: {x_scale=:.2f}, {y_scale=:.2f}, {screen_width=:.2f}, {screen_height=:.2f}, ratio: {screen_width / screen_height:.2f}")
     else:
         x_scale = y_scale = 1.0
 
     return x_delta, y_delta, screen_width, screen_height, x_scale, y_scale, base_image
 
 
-def extract_highlights(node: Node, enable_cropping: bool = True) -> list[Highlight]:
+def extract_highlights(
+    node: File,
+    enable_cropping: bool = True,
+) -> list[Highlight]:
     """
     Extract highlights from the node.
 
@@ -346,7 +333,6 @@ def extract_highlights(node: Node, enable_cropping: bool = True) -> list[Highlig
             logger.debug(f"Skipping page {page_index}: {e}")
 
         if cropping_blocks and base_image:
-            
             for block_idx, block in cropping_blocks:
                 x_min, y_min, x_max, y_max = get_limits([block])
                 cropped = base_image.crop(
@@ -371,7 +357,12 @@ def extract_highlights(node: Node, enable_cropping: bool = True) -> list[Highlig
                     )
 
         elif cropping_blocks and not base_image:
-            svg_blocks.extend([(block_idx, block, get_color(block)) for block_idx, block in cropping_blocks])
+            svg_blocks.extend(
+                [
+                    (block_idx, block, get_color(block))
+                    for block_idx, block in cropping_blocks
+                ]
+            )
 
         if svg_blocks:
             with NamedTemporaryFile(
