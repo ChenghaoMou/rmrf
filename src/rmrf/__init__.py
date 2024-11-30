@@ -2,8 +2,13 @@ import logging
 
 from rich.logging import RichHandler
 
-from .fs import FileSystem
-from .markdown import MarkdownWriter, book_title_getter, paper_title_getter, update
+from rmrf.export.markdown import (
+    MarkdownWriter,
+    book_title_getter,
+    paper_title_getter,
+    update,
+)
+from rmrf.fs import FileSystem
 
 FORMAT = "%(message)s"
 logging.basicConfig(

@@ -9,15 +9,14 @@ from rich.console import Console
 from rmscene import (
     RootTextBlock,
     SceneGlyphItemBlock,
-    SceneInfo,
     SceneLineItemBlock,
     UnreadableBlock,
 )
 from shapely.geometry import Polygon
 
-from .fs import Node
-from .svg import blocks_to_svg
-from .writing_tools import remarkable_palette
+from rmrf.export.svg import blocks_to_svg
+from rmrf.fs import Node
+from rmrf.utils.writing_tools import remarkable_palette
 
 console = Console()
 warned_about_transformation = False
@@ -268,7 +267,7 @@ def get_transformation(
     return x_delta, y_delta, screen_width, screen_height, x_scale, y_scale, base_image
 
 
-def extract_highlights(node: Node) -> list[Highlight]:
+def extract_highlights(node: Node, enable_cropping: bool = True) -> list[Highlight]:
     """
     Extract highlights from the node.
 
@@ -276,6 +275,8 @@ def extract_highlights(node: Node) -> list[Highlight]:
     ----------
     node: Node
         The node to extract highlights from.
+    enable_cropping: bool
+        Whether to enable cropping. Defaults to True.
 
     Returns
     -------
@@ -326,7 +327,7 @@ def extract_highlights(node: Node) -> list[Highlight]:
                 continue
 
             # * test if the block is close to a rectangle
-            if is_rectangular(block):
+            if is_rectangular(block) and enable_cropping:
                 cropping_blocks.append((block_idx, block))
             else:
                 svg_blocks.append((block_idx, block, get_color(block)))

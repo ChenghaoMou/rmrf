@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 from collections import defaultdict
@@ -28,6 +29,7 @@ class Node:
         self.source_dir = Path(self.source_dir)
         self.cache_dir = Path(self.cache_dir)
         self.read_page_map()
+        self.zid = hashlib.shake_256(self.name.encode()).hexdigest(6)
 
     def read_page_map(self):
         self.page_scroll = defaultdict(int)
