@@ -33,8 +33,12 @@ def get_color(
         *_, b, g, r, a = block.extra_data
         return (r, g, b, a)
 
-    r, g, b = remarkable_palette[block.item.value.color]
-    return (r, g, b, 255)
+    r, g, b, *a = remarkable_palette[block.item.value.color]
+    if a:
+        a = a[0]
+    else:
+        a = 255
+    return (r, g, b, a)
 
 
 def get_limits(
@@ -277,119 +281,271 @@ def extract_highlights(
     doc = node.doc
 
     for page_index, blocks in sorted(node.rm_blocks.items(), key=lambda x: x[0]):
-        svg_blocks = []
-        cropping_blocks = []
-
-        for block_idx, block in enumerate(blocks):
-            if not isinstance(block, node.valid_elements):
-                if isinstance(block, UnreadableBlock):
-                    logger.error(f"{block}")
-                continue
-
-            if isinstance(block, RootTextBlock):
-                svg_blocks.append((block_idx, block, (0, 0, 0, 255)))
-                continue
-
-            if isinstance(block, SceneLineItemBlock) and block.item.value is None:
-                continue
-
-            if block.item.deleted_length > 0:
-                continue
-
-            # * If this is a highlight block, we don't need to draw it
-            if node.is_highlight_block(block):
-                highlights.append(
-                    TextHighlight(
-                        page_index=page_index or -1,
-                        block_index=block_idx,
-                        tags=node.page_tags.get(page_index, set()),
-                        text=block.item.value.text,
-                        color=get_color(block),
-                    )
-                )
-                continue
-
-            # * If this is not a handwriting block, we don't need to draw it
-            if not node.is_handwriting_block(block):
-                continue
-
-            # * test if the block is close to a rectangle
-            if is_rectangular(block) and enable_cropping:
-                cropping_blocks.append((block_idx, block))
-            else:
-                svg_blocks.append((block_idx, block, get_color(block)))
-
-        try:
-            (
-                x_delta,
-                y_delta,
-                screen_width,
-                screen_height,
-                x_scale,
-                y_scale,
-                base_image,
-            ) = get_transformation(node, blocks, doc, page_index)
-        except TransformationError as e:
-            logger.debug(f"Skipping page {page_index}: {e}")
-
-        if cropping_blocks and base_image:
-            for block_idx, block in cropping_blocks:
-                x_min, y_min, x_max, y_max = get_limits([block])
-                cropped = base_image.crop(
-                    (
-                        (x_min + x_delta) * x_scale,
-                        (y_min + y_delta) * y_scale,
-                        (x_max + x_delta) * x_scale,
-                        (y_max + y_delta) * y_scale,
-                    )
-                )
-                with NamedTemporaryFile(
-                    mode="wb", suffix=".png", delete=False, dir=node.cache_dir
-                ) as f:
-                    cropped.save(f)
-                    highlights.append(
-                        ImageHighlight(
-                            page_index=page_index,
-                            block_index=block_idx,
-                            tags=node.page_tags.get(page_index, set()),
-                            image_path=f.name,
-                        )
-                    )
-
-        elif cropping_blocks and not base_image:
-            svg_blocks.extend(
-                [
-                    (block_idx, block, get_color(block))
-                    for block_idx, block in cropping_blocks
-                ]
+        highlights.extend(
+            extract_highlights_from_blocks(
+                blocks,
+                enable_cropping,
+                node=node,
+                doc=doc,
+                page_index=page_index,
+                page_tags=node.page_tags.get(page_index, set()),
             )
+        )
+        # svg_blocks = []
+        # cropping_blocks = []
 
-        if svg_blocks:
-            with NamedTemporaryFile(
-                mode="w", suffix=".svg", delete=False, dir=node.cache_dir
-            ) as f:
-                margin = 0
+        # for block_idx, block in enumerate(blocks):
+        #     if not isinstance(block, node.valid_elements):
+        #         if isinstance(block, UnreadableBlock):
+        #             logger.error(f"{block}")
+        #         continue
 
-                blocks_to_svg(
-                    [(block, color) for _, block, color in svg_blocks],
-                    f,
-                    xpos_shift=x_delta + margin,
-                    ypos_shift=y_delta + margin,
-                    screen_width=screen_width + margin * 2,
-                    screen_height=screen_height + margin * 2,
-                    base_image=base_image,
-                    margin=margin,
-                    x_scale=x_scale,
-                    y_scale=y_scale,
+        #     if isinstance(block, RootTextBlock):
+        #         svg_blocks.append((block_idx, block, (0, 0, 0, 255)))
+        #         continue
+
+        #     if isinstance(block, SceneLineItemBlock) and block.item.value is None:
+        #         continue
+
+        #     if block.item.deleted_length > 0:
+        #         continue
+
+        #     # * If this is a highlight block, we don't need to draw it
+        #     if node.is_highlight_block(block):
+        #         highlights.append(
+        #             TextHighlight(
+        #                 page_index=page_index or -1,
+        #                 block_index=block_idx,
+        #                 tags=node.page_tags.get(page_index, set()),
+        #                 text=block.item.value.text,
+        #                 color=get_color(block),
+        #             )
+        #         )
+        #         continue
+
+        #     # * If this is not a handwriting block, we don't need to draw it
+        #     if not node.is_handwriting_block(block):
+        #         continue
+
+        #     # * test if the block is close to a rectangle
+        #     if is_rectangular(block) and enable_cropping:
+        #         cropping_blocks.append((block_idx, block))
+        #     else:
+        #         svg_blocks.append((block_idx, block, get_color(block)))
+
+        # try:
+        #     (
+        #         x_delta,
+        #         y_delta,
+        #         screen_width,
+        #         screen_height,
+        #         x_scale,
+        #         y_scale,
+        #         base_image,
+        #     ) = get_transformation(node, blocks, doc, page_index)
+        # except TransformationError as e:
+        #     logger.debug(f"Skipping page {page_index}: {e}")
+
+        # if cropping_blocks and base_image:
+        #     for block_idx, block in cropping_blocks:
+        #         x_min, y_min, x_max, y_max = get_limits([block])
+        #         cropped = base_image.crop(
+        #             (
+        #                 (x_min + x_delta) * x_scale,
+        #                 (y_min + y_delta) * y_scale,
+        #                 (x_max + x_delta) * x_scale,
+        #                 (y_max + y_delta) * y_scale,
+        #             )
+        #         )
+        #         with NamedTemporaryFile(
+        #             mode="wb", suffix=".png", delete=False, dir=node.cache_dir
+        #         ) as f:
+        #             cropped.save(f)
+        #             highlights.append(
+        #                 ImageHighlight(
+        #                     page_index=page_index,
+        #                     block_index=block_idx,
+        #                     tags=node.page_tags.get(page_index, set()),
+        #                     image_path=f.name,
+        #                 )
+        #             )
+
+        # elif cropping_blocks and not base_image:
+        #     svg_blocks.extend(
+        #         [
+        #             (block_idx, block, get_color(block))
+        #             for block_idx, block in cropping_blocks
+        #         ]
+        #     )
+
+        # if svg_blocks:
+        #     with NamedTemporaryFile(
+        #         mode="w", suffix=".svg", delete=False, dir=node.cache_dir
+        #     ) as f:
+        #         margin = 0
+
+        #         blocks_to_svg(
+        #             [(block, color) for _, block, color in svg_blocks],
+        #             f,
+        #             xpos_shift=x_delta + margin,
+        #             ypos_shift=y_delta + margin,
+        #             screen_width=screen_width + margin * 2,
+        #             screen_height=screen_height + margin * 2,
+        #             base_image=base_image,
+        #             margin=margin,
+        #             x_scale=x_scale,
+        #             y_scale=y_scale,
+        #         )
+
+        #         highlights.append(
+        #             DrawingHighlight(
+        #                 page_index=page_index,
+        #                 block_index=float("inf"),
+        #                 tags=node.page_tags.get(page_index, set()),
+        #                 image_path=f.name,
+        #             )
+        #         )
+
+    return highlights
+
+def extract_highlights_from_blocks(
+    blocks: list[SceneLineItemBlock | SceneGlyphItemBlock | RootTextBlock],
+    enable_cropping: bool = True,
+    allowed_elements: set| None = None,
+    page_index: int | None = None,
+    page_tags: set | None = None,
+    node: File | None = None,
+    doc: fitz.Document | None = None,
+) -> list[Highlight]:
+    if allowed_elements is None:
+        allowed_elements = (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
+
+    if node is None:
+        class MockNode:
+            def __init__(self):
+                self.zoom_width = 1620
+                self.zoom_height = 2160
+                self.center_y = 1080
+                self.cache_dir = "/tmp"
+
+        node = MockNode()
+
+    highlights: list[Highlight] = []
+    svg_blocks = []
+    cropping_blocks = []
+
+    for block_idx, block in enumerate(blocks):
+        if not isinstance(block, allowed_elements):
+            if isinstance(block, UnreadableBlock):
+                logger.error(f"{block}")
+            continue
+
+        if isinstance(block, RootTextBlock):
+            svg_blocks.append((block_idx, block, (0, 0, 0, 255)))
+            continue
+
+        if isinstance(block, SceneLineItemBlock) and block.item.value is None:
+            continue
+
+        if block.item.deleted_length > 0:
+            continue
+
+        # * If this is a highlight block, we don't need to draw it
+        if File.is_highlight_block(block):
+            highlights.append(
+                TextHighlight(
+                    page_index=page_index or -1,
+                    block_index=block_idx,
+                    tags=page_tags or set(),
+                    text=block.item.value.text,
+                    color=get_color(block),
                 )
+            )
+            continue
 
+        # * If this is not a handwriting block, we don't need to draw it
+        if not File.is_handwriting_block(block):
+            continue
+
+        # * test if the block is close to a rectangle
+        if is_rectangular(block) and enable_cropping:
+            cropping_blocks.append((block_idx, block))
+        else:
+            svg_blocks.append((block_idx, block, get_color(block)))
+
+    try:
+
+        (
+            x_delta,
+            y_delta,
+            screen_width,
+            screen_height,
+            x_scale,
+            y_scale,
+            base_image,
+        ) = get_transformation(node, blocks, doc, page_index)
+    except TransformationError as e:
+        logger.debug(f"Skipping page {page_index}: {e}")
+
+    if cropping_blocks and base_image:
+        for block_idx, block in cropping_blocks:
+            x_min, y_min, x_max, y_max = get_limits([block])
+            cropped = base_image.crop(
+                (
+                    (x_min + x_delta) * x_scale,
+                    (y_min + y_delta) * y_scale,
+                    (x_max + x_delta) * x_scale,
+                    (y_max + y_delta) * y_scale,
+                )
+            )
+            with NamedTemporaryFile(
+                mode="wb", suffix=".png", delete=False, dir=node.cache_dir
+            ) as f:
+                cropped.save(f)
                 highlights.append(
-                    DrawingHighlight(
+                    ImageHighlight(
                         page_index=page_index,
-                        block_index=float("inf"),
-                        tags=node.page_tags.get(page_index, set()),
+                        block_index=block_idx,
+                        tags=page_tags or set(),
                         image_path=f.name,
                     )
                 )
 
+    elif cropping_blocks and not base_image:
+        svg_blocks.extend(
+            [
+                (block_idx, block, get_color(block))
+                for block_idx, block in cropping_blocks
+            ]
+        )
+
+    if svg_blocks:
+        with NamedTemporaryFile(
+            mode="w", suffix=".svg", delete=False, dir=node.cache_dir
+        ) as f:
+            margin = 0
+
+            blocks_to_svg(
+                [(block, color) for _, block, color in svg_blocks],
+                f,
+                xpos_shift=x_delta + margin,
+                ypos_shift=y_delta + margin,
+                screen_width=screen_width + margin * 2,
+                screen_height=screen_height + margin * 2,
+                base_image=base_image,
+                margin=margin,
+                x_scale=x_scale,
+                y_scale=y_scale,
+            )
+
+            highlights.append(
+                DrawingHighlight(
+                    page_index=page_index,
+                    block_index=float("inf"),
+                    tags=page_tags or set(),
+                    image_path=f.name,
+                )
+            )
+
     return highlights
+

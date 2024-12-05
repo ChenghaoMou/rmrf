@@ -37,7 +37,7 @@ class SvgDocInfo:
 SCREEN_WIDTH = 1404
 SCREEN_HEIGHT = 1872
 XPOS_SHIFT = SCREEN_WIDTH / 2
-logger = logging.getLogger("rmrf")
+logger = logging.getLogger(__name__)
 
 SVG_HEADER = string.Template("""<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" height="$height" width="$width">

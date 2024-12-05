@@ -24,12 +24,24 @@ remarkable_palette = {
     PenColor.BLUE: (78, 105, 201),
     PenColor.RED: (179, 62, 57),
     PenColor.GRAY_OVERLAP: (125, 125, 125),
-    #! Skipped as different colors are used for highlights
-    #! PenColor.HIGHLIGHT = ...
     PenColor.GREEN_2: (161, 216, 125),
     PenColor.CYAN: (139, 208, 229),
     PenColor.MAGENTA: (183, 130, 205),
     PenColor.YELLOW_2: (247, 232, 81),
+    PenColor.HIGHLIGHT_YELLOW: (255, 237, 117, 255),
+    PenColor.HIGHLIGHT_BLUE: (190, 234, 254, 255),
+    PenColor.HIGHLIGHT_PINK: (242, 158, 255, 255),
+    PenColor.HIGHLIGHT_ORANGE: (255, 195, 140, 255),
+    PenColor.HIGHLIGHT_GREEN: (172, 255, 133, 255),
+    PenColor.HIGHLIGHT_GRAY: (199, 199, 198, 255),
+    PenColor.SHADER_GRAY: (33, 30, 28, 64),
+    PenColor.SHADER_ORANGE: (254, 178, 0, 115),
+    PenColor.SHADER_MAGENTA: (192, 127, 210, 128),
+    PenColor.SHADER_BLUE: (48, 74, 224, 77),
+    PenColor.SHADER_RED: (194, 49, 50, 102),
+    PenColor.SHADER_GREEN: (145, 218, 113, 128),
+    PenColor.SHADER_YELLOW: (250, 231, 25, 115),
+    PenColor.SHADER_CYAN: (116, 210, 232, 102),
 }
 
 

@@ -174,7 +174,11 @@ class File:
 
     @staticmethod
     def is_handwriting_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
-        return block.item and block.item.value and block.item.value.points
+        return (
+            block.item
+            and block.item.value
+            and getattr(block.item.value, "points", None)
+        )
 
     @property
     def doc(self) -> fitz.Document | None:

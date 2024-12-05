@@ -1856,6 +1856,7 @@ dependencies = [
     { name = "rich" },
     { name = "rmscene" },
     { name = "shapely" },
+    { name = "typer" },
 ]
 
 [package.dev-dependencies]
@@ -1879,6 +1880,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.9.3" },
     { name = "rmscene", editable = "../rmscene" },
     { name = "shapely", specifier = ">=2.0.6" },
+    { name = "typer", specifier = ">=0.13.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -1892,7 +1894,7 @@ dev = [
 
 [[package]]
 name = "rmscene"
-version = "0.6.1.dev0"
+version = "0.6.2.dev0"
 source = { editable = "../rmscene" }
 dependencies = [
     { name = "packaging" },
@@ -2223,10 +2225,10 @@ name = "typer"
 version = "0.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click", marker = "python_full_version < '3.12'" },
-    { name = "rich", marker = "python_full_version < '3.12'" },
-    { name = "shellingham", marker = "python_full_version < '3.12'" },
-    { name = "typing-extensions", marker = "python_full_version < '3.12'" },
+    { name = "click" },
+    { name = "rich" },
+    { name = "shellingham" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/41/49ead3ad3310545e767bcb917c759b026ca9eada5d5c150c2fb6fc555568/typer-0.13.1.tar.gz", hash = "sha256:9d444cb96cc268ce6f8b94e13b4335084cef4c079998a9f4851a90229a3bd25c", size = 98631 }
 wheels = [
