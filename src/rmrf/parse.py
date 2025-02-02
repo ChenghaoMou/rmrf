@@ -29,8 +29,9 @@ class TransformationError(Exception):
 def get_color(
     block: SceneLineItemBlock | SceneGlyphItemBlock,
 ) -> tuple[int, int, int, int]:
-    if block.extra_data and len(block.extra_data) >= 5:
-        *_, b, g, r, a = block.extra_data
+    print(block)
+    if block.extra_value_data and len(block.extra_value_data) >= 5:
+        *_, b, g, r, a = block.extra_value_data
         return (r, g, b, a)
 
     r, g, b, *a = remarkable_palette[block.item.value.color]
@@ -187,13 +188,13 @@ def get_transformation(
 
         screen_width = screen_width_
 
-    assert (
-        x_max + x_delta <= screen_width
-    ), f"{x_max=:.2f}, {x_delta=:.2f}, {screen_width=:.2f}"
+    assert x_max + x_delta <= screen_width, (
+        f"{x_max=:.2f}, {x_delta=:.2f}, {screen_width=:.2f}"
+    )
     assert x_min + x_delta >= 0, f"{x_min=:.2f}, {x_delta=:.2f}"
-    assert (
-        x_max - x_min <= screen_width
-    ), f"{x_max=:.2f}, {x_min=:.2f}, {screen_width=:.2f}"
+    assert x_max - x_min <= screen_width, (
+        f"{x_max=:.2f}, {x_min=:.2f}, {screen_width=:.2f}"
+    )
 
     while (
         y_max - y_min > screen_height
@@ -234,13 +235,13 @@ def get_transformation(
     # x_delta = math.ceil(x_delta)
     # y_delta = math.ceil(y_delta)
 
-    assert (
-        y_max + y_delta <= screen_height
-    ), f"{y_max=:.2f}, {y_delta=:.2f}, {screen_height=:.2f}"
+    assert y_max + y_delta <= screen_height, (
+        f"{y_max=:.2f}, {y_delta=:.2f}, {screen_height=:.2f}"
+    )
     assert y_min + y_delta >= 0, f"{y_min=:.2f}, {y_delta=:.2f}"
-    assert (
-        y_max - y_min <= screen_height
-    ), f"{y_max=:.2f}, {y_min=:.2f}, {screen_height=:.2f}"
+    assert y_max - y_min <= screen_height, (
+        f"{y_max=:.2f}, {y_min=:.2f}, {screen_height=:.2f}"
+    )
 
     if base_image is not None:
         x_scale = image_width / screen_width
@@ -408,10 +409,11 @@ def extract_highlights(
 
     return highlights
 
+
 def extract_highlights_from_blocks(
     blocks: list[SceneLineItemBlock | SceneGlyphItemBlock | RootTextBlock],
     enable_cropping: bool = True,
-    allowed_elements: set| None = None,
+    allowed_elements: set | None = None,
     page_index: int | None = None,
     page_tags: set | None = None,
     node: File | None = None,
@@ -421,6 +423,7 @@ def extract_highlights_from_blocks(
         allowed_elements = (SceneLineItemBlock, SceneGlyphItemBlock, RootTextBlock)
 
     if node is None:
+
         class MockNode:
             def __init__(self):
                 self.zoom_width = 1620
@@ -474,7 +477,6 @@ def extract_highlights_from_blocks(
             svg_blocks.append((block_idx, block, get_color(block)))
 
     try:
-
         (
             x_delta,
             y_delta,
@@ -504,7 +506,7 @@ def extract_highlights_from_blocks(
                 cropped.save(f)
                 highlights.append(
                     ImageHighlight(
-                        page_index=page_index,
+                        page_index=page_index if page_index is not None else -1,
                         block_index=block_idx,
                         tags=page_tags or set(),
                         image_path=f.name,
@@ -548,4 +550,3 @@ def extract_highlights_from_blocks(
             )
 
     return highlights
-

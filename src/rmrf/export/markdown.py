@@ -98,7 +98,10 @@ class MarkdownWriter(Writer):
             os.remove(f"{self.target_dir}/{node.zid}.md")
 
         for page_index, group in groupby(
-            sorted(highlights, key=lambda x: x.page_index),
+            sorted(
+                highlights,
+                key=lambda x: x.page_index if x.page_index is not None else -1,
+            ),
             key=lambda x: x.page_index,
         ):
             highlights = []
@@ -111,9 +114,9 @@ class MarkdownWriter(Writer):
                         highlight.image_path,
                         static_dir / base_name,
                     )
-                    assert os.path.exists(
-                        static_dir / base_name
-                    ), f"static file {static_dir / base_name} does not exist"
+                    assert os.path.exists(static_dir / base_name), (
+                        f"static file {static_dir / base_name} does not exist"
+                    )
                     highlights.append(
                         f"![Image (page {page_index})](statics/{os.path.join(node.zid, base_name)})"
                     )

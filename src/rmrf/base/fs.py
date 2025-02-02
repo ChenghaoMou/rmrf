@@ -164,12 +164,11 @@ class File:
     @staticmethod
     def is_highlight_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
         # It must have at least 5 bytes to contain a color (a, r, g, b, ?)
+        # print(block.extra_data)
         return (
-            block.extra_data.startswith(b"\xa4\x01")
-            and len(block.extra_data) >= 5
-            and block.item
-            and block.item.value
-            and block.item.value.text
+            # block.extra_data.startswith(b"\xa4\x01")
+            # and len(block.extra_data) >= 5
+            block.item and block.item.value and getattr(block.item.value, "text", None)
         )
 
     @staticmethod
