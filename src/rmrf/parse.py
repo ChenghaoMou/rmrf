@@ -29,7 +29,6 @@ class TransformationError(Exception):
 def get_color(
     block: SceneLineItemBlock | SceneGlyphItemBlock,
 ) -> tuple[int, int, int, int]:
-    print(block)
     if block.extra_value_data and len(block.extra_value_data) >= 5:
         *_, b, g, r, a = block.extra_value_data
         return (r, g, b, a)
