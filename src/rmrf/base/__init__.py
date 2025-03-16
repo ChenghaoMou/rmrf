@@ -7,5 +7,11 @@ from .fs import (
     TextHighlight,
 )
 
-__all__ = ["File", "FileSystem", "Highlight", "TextHighlight", "ImageHighlight", "DrawingHighlight"]
-
+__all__ = [
+    "File",
+    "FileSystem",
+    "Highlight",
+    "TextHighlight",
+    "ImageHighlight",
+    "DrawingHighlight",
+]

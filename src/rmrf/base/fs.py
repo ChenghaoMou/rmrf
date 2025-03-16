@@ -19,7 +19,7 @@ class File:
     metadata: dict
     source_dir: Path | str
     cache_dir: Path | str
-    date_format: str = "%Y-%m-%d %H:%M:%S:%f"
+    date_format: str = "%Y-%m-%d"
     id2page: dict[str, int] = field(default_factory=dict)
     page_tags: dict[int, set[str]] = field(default_factory=dict)
     page_scroll: dict[int, int] = field(default_factory=dict)
@@ -113,9 +113,12 @@ class File:
 
     @property
     def created_time(self):
-        result = datetime.fromtimestamp(
-            int(self.metadata["createdTime"]) / 1000
-        ).strftime(self.date_format)
+        try:
+            result = datetime.fromtimestamp(
+                int(self.metadata["createdTime"]) / 1000
+            ).strftime(self.date_format)
+        except Exception:
+            result = ""
         # Hopefully I will live long enough to update this code :)
         if not result.startswith("20"):
             result = datetime.now().strftime(self.date_format)
@@ -163,11 +166,7 @@ class File:
 
     @staticmethod
     def is_highlight_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
-        # It must have at least 5 bytes to contain a color (a, r, g, b, ?)
-        # print(block.extra_data)
         return (
-            # block.extra_data.startswith(b"\xa4\x01")
-            # and len(block.extra_data) >= 5
             block.item and block.item.value and getattr(block.item.value, "text", None)
         )
 
