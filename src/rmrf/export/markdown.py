@@ -13,13 +13,11 @@ from jinja2 import Template
 from rich.console import Console
 from rich.tree import Tree
 
-from rmrf.base import (
-    File,
-    FileSystem,
-    Highlight,
-    ImageHighlight,
-    TextHighlight,
-)
+from rmrf.base import File
+from rmrf.base import FileSystem
+from rmrf.base import Highlight
+from rmrf.base import ImageHighlight
+from rmrf.base import TextHighlight
 from rmrf.export.base import Writer
 from rmrf.utils import find_zotero_item
 
@@ -114,9 +112,9 @@ class MarkdownWriter(Writer):
                         highlight.image_path,
                         static_dir / base_name,
                     )
-                    assert os.path.exists(static_dir / base_name), (
-                        f"static file {static_dir / base_name} does not exist"
-                    )
+                    assert os.path.exists(
+                        static_dir / base_name
+                    ), f"static file {static_dir / base_name} does not exist"
                     highlights.append(
                         f"![Image (page {page_index})](statics/{os.path.join(node.zid, base_name)})"
                     )

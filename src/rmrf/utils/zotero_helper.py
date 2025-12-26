@@ -12,6 +12,7 @@ logger = logging.getLogger("rmrf")
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 cache = diskcache.Cache(directory=Path.home() / ".cache" / "rmrf")
 
+
 @dataclass
 class ZoteroItem:
     key: str
@@ -68,6 +69,7 @@ class ZoteroLibrary:
 
         logger.warning(f"No PDF found for item: [red]{item_name}[/red]")
         return None
+
 
 @cache.memoize(typed=True, expire=60 * 60 * 24 * 7)
 def find_zotero_item(item_name: str) -> ZoteroItem | None:

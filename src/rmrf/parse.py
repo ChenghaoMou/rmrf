@@ -5,15 +5,17 @@ from tempfile import NamedTemporaryFile
 import fitz
 from PIL import Image
 from rich.console import Console
-from rmscene import (
-    RootTextBlock,
-    SceneGlyphItemBlock,
-    SceneLineItemBlock,
-    UnreadableBlock,
-)
+from rmscene import RootTextBlock
+from rmscene import SceneGlyphItemBlock
+from rmscene import SceneLineItemBlock
+from rmscene import UnreadableBlock
 from shapely.geometry import Polygon
 
-from rmrf.base import DrawingHighlight, File, Highlight, ImageHighlight, TextHighlight
+from rmrf.base import DrawingHighlight
+from rmrf.base import File
+from rmrf.base import Highlight
+from rmrf.base import ImageHighlight
+from rmrf.base import TextHighlight
 from rmrf.export import blocks_to_svg
 from rmrf.utils import remarkable_palette
 
@@ -187,13 +189,13 @@ def get_transformation(
 
         screen_width = screen_width_
 
-    assert x_max + x_delta <= screen_width, (
-        f"{x_max=:.2f}, {x_delta=:.2f}, {screen_width=:.2f}"
-    )
+    assert (
+        x_max + x_delta <= screen_width
+    ), f"{x_max=:.2f}, {x_delta=:.2f}, {screen_width=:.2f}"
     assert x_min + x_delta >= 0, f"{x_min=:.2f}, {x_delta=:.2f}"
-    assert x_max - x_min <= screen_width, (
-        f"{x_max=:.2f}, {x_min=:.2f}, {screen_width=:.2f}"
-    )
+    assert (
+        x_max - x_min <= screen_width
+    ), f"{x_max=:.2f}, {x_min=:.2f}, {screen_width=:.2f}"
 
     while (
         y_max - y_min > screen_height
@@ -234,13 +236,13 @@ def get_transformation(
     # x_delta = math.ceil(x_delta)
     # y_delta = math.ceil(y_delta)
 
-    assert y_max + y_delta <= screen_height, (
-        f"{y_max=:.2f}, {y_delta=:.2f}, {screen_height=:.2f}"
-    )
+    assert (
+        y_max + y_delta <= screen_height
+    ), f"{y_max=:.2f}, {y_delta=:.2f}, {screen_height=:.2f}"
     assert y_min + y_delta >= 0, f"{y_min=:.2f}, {y_delta=:.2f}"
-    assert y_max - y_min <= screen_height, (
-        f"{y_max=:.2f}, {y_min=:.2f}, {screen_height=:.2f}"
-    )
+    assert (
+        y_max - y_min <= screen_height
+    ), f"{y_max=:.2f}, {y_min=:.2f}, {screen_height=:.2f}"
 
     if base_image is not None:
         x_scale = image_width / screen_width

@@ -1,13 +1,22 @@
+"""
+A local file system with Remarkable files.
+"""
+
 import hashlib
 import json
 import logging
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import fitz
-from rmscene import RootTextBlock, SceneGlyphItemBlock, SceneLineItemBlock, read_blocks
+from rmscene import RootTextBlock
+from rmscene import SceneGlyphItemBlock
+from rmscene import SceneLineItemBlock
+from rmscene import read_blocks
 from rmscene.scene_stream import Block
 
 logger = logging.getLogger("rmrf")
@@ -16,7 +25,7 @@ logger = logging.getLogger("rmrf")
 @dataclass
 class File:
     id: str
-    metadata: dict
+    metadata: dict[str, Any]
     source_dir: Path | str
     cache_dir: Path | str
     date_format: str = "%Y-%m-%d"
@@ -25,13 +34,13 @@ class File:
     page_scroll: dict[int, int] = field(default_factory=dict)
     children: list["File"] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.source_dir = Path(self.source_dir)
         self.cache_dir = Path(self.cache_dir)
         self.read_page_map()
         self.zid = hashlib.shake_256(self.name.encode()).hexdigest(6)
 
-    def read_page_map(self):
+    def read_page_map(self) -> None:
         self.page_scroll = defaultdict(int)
         if "cPages" in self.metadata and "pages" in self.metadata["cPages"]:
             for i, page in enumerate(self.metadata["cPages"]["pages"]):
@@ -40,9 +49,7 @@ class File:
                     self.page_scroll[i] = page["verticalScroll"]["value"]
 
         if "pages" in self.metadata:
-            for page, i in zip(
-                self.metadata["pages"], self.metadata["redirectionPageMap"]
-            ):
+            for page, i in zip(self.metadata["pages"], self.metadata["redirectionPageMap"], strict=True):
                 self.id2page[page] = i
 
         self.page_tags = defaultdict(set)
@@ -52,7 +59,7 @@ class File:
                 self.page_tags[page_idx].add(item["name"])
 
         self.rm_blocks = {}
-        highlight_dir = self.source_dir / self.id
+        highlight_dir = Path(self.source_dir) / self.id
         if not highlight_dir.exists():
             return
 
@@ -68,19 +75,19 @@ class File:
         return self.metadata["orientation"]
 
     @property
-    def is_portrait(self):
+    def is_portrait(self) -> bool:
         return self.orientation == "portrait"
 
     @property
-    def is_landscape(self):
+    def is_landscape(self) -> bool:
         return self.orientation == "landscape"
 
     @property
-    def zoom_mode(self):
+    def zoom_mode(self) -> str | None:
         return self.metadata["zoomMode"]
 
     @property
-    def zoom_scale(self):
+    def zoom_scale(self) -> float:
         return self.metadata["customZoomScale"]
 
     @property
@@ -96,11 +103,11 @@ class File:
         return self.metadata["customZoomCenterY"]
 
     @property
-    def screen_height(self):
+    def screen_height(self) -> int:
         return 2160
 
     @property
-    def screen_width(self):
+    def screen_width(self) -> int:
         return 1620
 
     @property
@@ -114,9 +121,7 @@ class File:
     @property
     def created_time(self):
         try:
-            result = datetime.fromtimestamp(
-                int(self.metadata["createdTime"]) / 1000
-            ).strftime(self.date_format)
+            result = datetime.fromtimestamp(int(self.metadata["createdTime"]) / 1000).strftime(self.date_format)
         except Exception:
             result = ""
         # Hopefully I will live long enough to update this code :)
@@ -126,15 +131,11 @@ class File:
 
     @property
     def last_modified_time(self):
-        return datetime.fromtimestamp(
-            int(self.metadata["lastModified"]) / 1000
-        ).strftime(self.date_format)
+        return datetime.fromtimestamp(int(self.metadata["lastModified"]) / 1000).strftime(self.date_format)
 
     @property
     def last_opened_time(self):
-        return datetime.fromtimestamp(int(self.metadata["lastOpened"]) / 1000).strftime(
-            self.date_format
-        )
+        return datetime.fromtimestamp(int(self.metadata["lastOpened"]) / 1000).strftime(self.date_format)
 
     @property
     def is_collection(self):
@@ -166,17 +167,11 @@ class File:
 
     @staticmethod
     def is_highlight_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
-        return (
-            block.item and block.item.value and getattr(block.item.value, "text", None)
-        )
+        return block.item and block.item.value and getattr(block.item.value, "text", None)
 
     @staticmethod
     def is_handwriting_block(block: SceneLineItemBlock | SceneGlyphItemBlock):
-        return (
-            block.item
-            and block.item.value
-            and getattr(block.item.value, "points", None)
-        )
+        return block.item and block.item.value and getattr(block.item.value, "points", None)
 
     @property
     def doc(self) -> fitz.Document | None:
@@ -268,7 +263,7 @@ class FileSystem:
         file_ids = set()
         for file in self.source_dir.glob("*"):
             file_id = file.name.split(".")[0]
-            if not file_id or file_id.startswith("."):
+            if not file_id or file_id.startswith(".") or file_id == "rm-search-index":
                 continue
             file_ids.add(file_id)
         return file_ids

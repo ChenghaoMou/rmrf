@@ -1,11 +1,9 @@
-from .fs import (
-    DrawingHighlight,
-    File,
-    FileSystem,
-    Highlight,
-    ImageHighlight,
-    TextHighlight,
-)
+from .fs import DrawingHighlight
+from .fs import File
+from .fs import FileSystem
+from .fs import Highlight
+from .fs import ImageHighlight
+from .fs import TextHighlight
 
 __all__ = [
     "File",

@@ -42,7 +42,7 @@ writer = MarkdownWriter(
     template=TEMPLATE,
     enable_zotero=False,
 )
-# Parse papers from the reMarkable backup folder 
+# Parse papers from the reMarkable backup folder
 # and export to Markdown in the target folder
 update(
     fs=fs,
@@ -83,9 +83,11 @@ tags:
 # {{ original_title | default(title) }}
 
 {%- if pages is defined and pages %}
+
 ## Pages
 
 {%- for page_idx, tags, highlights in pages %}
+
 ### Page {{ page_idx }}
 
 {%- if tags %}
@@ -163,15 +165,18 @@ tags:
 {%- endif %}
 
 {%- if abstract is defined and abstract %}
+
 ## Abstract
 
 {{ abstract }}
 {%- endif %}
 
 {%- if pages is defined and pages %}
+
 ## Pages
 
 {%- for page_idx, tags, highlights in pages %}
+
 ### Page {{ page_idx }}
 
 {%- if tags %}
@@ -215,7 +220,7 @@ This is what you get after exporting to SVG:
 ![Exported SVG](./static/export2.png)
 
 1. For PDF or EPub files
-   1. you can draw a box (in one stroke) to crop out a part of the page. It will be embedded in the markdown as an image. (See the first set of screenshots above) (This is differentiated from handwriting by some crude heuristics, which means you *can't* draw box-adjacent shapes freely as they will create multiple cropped images)
+   1. you can draw a box (in one stroke) to crop out a part of the page. It will be embedded in the markdown as an image. (See the first set of screenshots above) (This is differentiated from handwriting by some crude heuristics, which means you _can't_ draw box-adjacent shapes freely as they will create multiple cropped images)
    2. highlights will be rendered in markdown as `<mark>` tags.
    3. Handwriting is exported as SVG for annotated pages.
 2. Typed text may **interfere** with the rendering with misalignment. They may have **incorrect styles**, though I try to preserve as much as possible. (See the second set of screenshots above)
