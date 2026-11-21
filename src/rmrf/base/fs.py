@@ -28,7 +28,8 @@ class File:
     metadata: dict[str, Any]
     source_dir: Path | str
     cache_dir: Path | str
-    date_format: str = "%Y-%m-%d"
+    # Matches Obsidian's update-time-on-edit default, which also writes these keys.
+    date_format: str = "%Y-%m-%dT%H:%M"
     id2page: dict[str, int] = field(default_factory=dict)
     page_tags: dict[int, set[str]] = field(default_factory=dict)
     page_scroll: dict[int, int] = field(default_factory=dict)
@@ -118,20 +119,30 @@ class File:
     def zoom_width(self):
         return self.metadata["customZoomPageWidth"]
 
-    @property
-    def created_time(self):
+    def _timestamp_ms(self, key: str) -> int | None:
         try:
-            result = datetime.fromtimestamp(int(self.metadata["createdTime"]) / 1000).strftime(self.date_format)
-        except Exception:
-            result = ""
-        # Hopefully I will live long enough to update this code :)
-        if not result.startswith("20"):
-            result = datetime.now().strftime(self.date_format)
-        return result
+            value = int(self.metadata[key])
+        except (KeyError, TypeError, ValueError):
+            return None
+        # The tablet writes "0" when it does not know the time.
+        return value if value > 0 else None
 
     @property
-    def last_modified_time(self):
-        return datetime.fromtimestamp(int(self.metadata["lastModified"]) / 1000).strftime(self.date_format)
+    def last_modified_ms(self) -> int | None:
+        return self._timestamp_ms("lastModified")
+
+    @property
+    def created_time(self) -> str:
+        # Documents copied onto the tablet over SSH have no createdTime.
+        milliseconds = self._timestamp_ms("createdTime") or self.last_modified_ms
+        moment = datetime.fromtimestamp(milliseconds / 1000) if milliseconds else datetime.now()
+        return moment.strftime(self.date_format)
+
+    @property
+    def last_modified_time(self) -> str:
+        milliseconds = self.last_modified_ms
+        moment = datetime.fromtimestamp(milliseconds / 1000) if milliseconds else datetime.now()
+        return moment.strftime(self.date_format)
 
     @property
     def last_opened_time(self):
@@ -203,10 +214,7 @@ class FileSystem:
     def __post_init__(self):
         self.source_dir = Path(self.source_dir)
         self.cache_dir = Path(self.cache_dir)
-        user_home = Path.home()
-        logger.info(
-            f"Initializing with ~/{str(self.source_dir.relative_to(user_home))} and ~/{str(self.cache_dir.relative_to(user_home))}"
-        )
+        logger.info(f"Initializing with {self.source_dir} and {self.cache_dir}")
         self.root = File(
             "root",
             {"visibleName": "Root", "type": "CollectionType"},

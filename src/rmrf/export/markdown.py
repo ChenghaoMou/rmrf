@@ -1,7 +1,6 @@
-import glob
+import hashlib
 import logging
 import os
-import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,6 +18,9 @@ from rmrf.base import Highlight
 from rmrf.base import ImageHighlight
 from rmrf.base import TextHighlight
 from rmrf.export.base import Writer
+from rmrf.export.note import merge_note
+from rmrf.export.note import recorded_last_modified
+from rmrf.utils import ZoteroItem
 from rmrf.utils import find_zotero_item
 
 console = Console()
@@ -30,6 +32,9 @@ class MarkdownWriter(Writer):
     """
     A writer that exports highlights to Markdown files.
 
+    Re-syncing a note only replaces the frontmatter keys the template renders and the
+    body between the managed-region markers, so anything added by hand survives.
+
     Parameters
     ----------
     template: str | Path
@@ -38,41 +43,58 @@ class MarkdownWriter(Writer):
         Whether to enable Zotero lookup. Defaults to False.
     enable_cropping: bool
         Whether to enable cropping. Defaults to True.
+    zotero_lookup: Callable[[File], ZoteroItem | None] | None
+        How to find a document's Zotero item, e.g. ``LocalZotero().find_document``
+        wrapped to take a File. Defaults to the Zotero Web API by title.
     """
 
     template: str | Path
     enable_zotero: bool = False
     enable_cropping: bool = True
+    zotero_lookup: Callable[[File], ZoteroItem | None] | None = None
 
     def __post_init__(self):
         super().__post_init__()
         self.template = Template(Path(self.template).read_text())
-        self.enable_zotero = self.enable_zotero
-        self.enable_cropping = self.enable_cropping
+        if self.zotero_lookup is None:
+            self.zotero_lookup = lambda node: find_zotero_item(self.title_getter(node))
+
+    def note_path(self, node: File) -> Path:
+        return self.target_dir / f"{node.zid}.md"
 
     def should_update(self, node: File, force: bool = False) -> bool:
+        """Whether the tablet has changed the document since its note was written."""
         if force:
             return True
-
-        if not os.path.exists(f"{self.target_dir}/{node.zid}.md"):
+        path = self.note_path(node)
+        if not path.exists():
             return True
+        recorded = recorded_last_modified(path.read_text())
+        return recorded is None or node.last_modified_ms is None or node.last_modified_ms > recorded
 
-        with open(f"{self.target_dir}/{node.zid}.md", "r") as f:
-            old_content = f.read()
-            last_modified = re.search(
-                r"updated: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d{6})", old_content
-            )
-            if not last_modified:
-                return True
-            last_modified_dt = datetime.strptime(
-                last_modified.group(1), "%Y-%m-%d %H:%M:%S:%f"
-            )
-            if last_modified_dt >= datetime.strptime(
-                node.last_modified_time, "%Y-%m-%d %H:%M:%S:%f"
-            ):
-                return False
+    def _copy_images(self, node: File, highlights: list[Highlight]) -> dict[str, str]:
+        """Copy image highlights into the static folder under content-hash names.
 
-        return True
+        Returns the new relative link for each image path. Names only change when the
+        image does, and images that are no longer used are removed.
+        """
+        static_dir = self.static_dir / node.zid
+        links: dict[str, str] = {}
+        for highlight in highlights:
+            if not isinstance(highlight, ImageHighlight):
+                continue
+            source = Path(highlight.image_path)
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()[:16]
+            name = f"{digest}{source.suffix}"
+            static_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, static_dir / name)
+            links[highlight.image_path] = f"statics/{node.zid}/{name}"
+        if static_dir.exists():
+            keep = {Path(link).name for link in links.values()}
+            for stale in static_dir.iterdir():
+                if stale.is_file() and stale.name not in keep:
+                    stale.unlink()
+        return links
 
     def update(
         self,
@@ -80,123 +102,76 @@ class MarkdownWriter(Writer):
         force=False,
         highlights: list[Highlight] | None = None,
     ):
-        # * Read the old content if the file exists and check the dates
         if not self.should_update(node, force):
             return False, None, None
 
-        pages = []
-        static_dir = self.static_dir / node.zid
-
-        if static_dir.exists():
-            # remove all files in the static dir
-            for f in glob.glob(f"{static_dir}/*"):
-                os.remove(f)
-
-        if os.path.exists(f"{self.target_dir}/{node.zid}.md"):
-            os.remove(f"{self.target_dir}/{node.zid}.md")
-
-        for page_index, group in groupby(
-            sorted(
-                highlights,
-                key=lambda x: x.page_index if x.page_index is not None else -1,
-            ),
-            key=lambda x: x.page_index,
-        ):
-            highlights = []
-
-            for highlight in group:
-                if isinstance(highlight, ImageHighlight):
-                    base_name = os.path.basename(highlight.image_path)
-                    os.makedirs(static_dir, exist_ok=True)
-                    shutil.copy(
-                        highlight.image_path,
-                        static_dir / base_name,
-                    )
-                    assert os.path.exists(
-                        static_dir / base_name
-                    ), f"static file {static_dir / base_name} does not exist"
-                    highlights.append(
-                        f"![Image (page {page_index})](statics/{os.path.join(node.zid, base_name)})"
-                    )
-                    # remove the image file
-                    os.remove(highlight.image_path)
-                elif isinstance(highlight, TextHighlight):
-                    highlights.append(
-                        # self.highlight_template.format(
-                        #     text=highlight.text,
-                        #     r=highlight.color[0],
-                        #     g=highlight.color[1],
-                        #     b=highlight.color[2],
-                        #     page_index=page_index,
-                        # )
-                        (*highlight.color, highlight.text)
-                    )
-
-            if highlight.tags:
-                tags = highlight.tags
-            else:
-                tags = []
-
-            pages.append((page_index, tags, highlights))
-
+        highlights = highlights or []
         try:
+            links = self._copy_images(node, highlights)
+            pages = []
+            for page_index, group in groupby(
+                sorted(highlights, key=lambda x: x.page_index if x.page_index is not None else -1),
+                key=lambda x: x.page_index,
+            ):
+                group = list(group)
+                rendered = []
+                for highlight in group:
+                    if isinstance(highlight, ImageHighlight):
+                        rendered.append(f"![Image (page {page_index})]({links[highlight.image_path]})")
+                    elif isinstance(highlight, TextHighlight):
+                        rendered.append((*highlight.color, highlight.text))
+                tags = sorted(group[-1].tags) if group[-1].tags else []
+                pages.append((page_index, tags, rendered))
+
+            if not pages:
+                return False, None, node.last_modified_time
+
             original_title = self.title_getter(node)
             title = original_title.replace('"', " ").replace("'", " ")
-
-            if self.enable_zotero:
-                logger.info(
-                    f"Looking up Zotero item for [yellow]{original_title}[/yellow]",
-                    extra={"markup": True},
-                )
-                zotero_item = find_zotero_item(original_title)
-                if zotero_item:
-                    logger.info(
-                        f"Found Zotero item for [yellow]{original_title}[/yellow]",
-                        extra={"markup": True},
-                    )
-                    note = self.template.render(
-                        original_title=original_title,
-                        title=title,
-                        alias=title,
-                        created=node.created_time,
-                        updated=node.last_modified_time,
-                        modified=datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f"),
-                        pages=pages,
-                        authors=zotero_item.authors,
-                        url=zotero_item.url,
-                        zotero_url=zotero_item.zotero_url,
-                        abstract=zotero_item.abstract,
-                    )
-                    if pages:
-                        with open(f"{self.target_dir}/{node.zid}.md", "w") as f:
-                            f.write(note)
-                        return True, None, node.last_modified_time
-
-            note = self.template.render(
+            context = dict(
                 original_title=original_title,
                 title=title,
                 alias=title,
                 created=node.created_time,
                 updated=node.last_modified_time,
-                modified=datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f"),
+                modified=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
                 pages=pages,
             )
-            if pages:
-                with open(f"{self.target_dir}/{node.zid}.md", "w") as f:
-                    f.write(note)
-                return True, None, node.last_modified_time
+
+            if self.enable_zotero:
+                zotero_item = self.zotero_lookup(node)
+                if zotero_item:
+                    logger.info(
+                        f"Found Zotero item for [yellow]{original_title}[/yellow]",
+                        extra={"markup": True},
+                    )
+                    context.update(
+                        authors=zotero_item.authors,
+                        url=zotero_item.url,
+                        zotero_url=zotero_item.zotero_url,
+                        abstract=zotero_item.abstract,
+                    )
+                else:
+                    logger.warning(
+                        f"No Zotero item for [yellow]{original_title}[/yellow]",
+                        extra={"markup": True},
+                    )
+
+            path = self.note_path(node)
+            existing = path.read_text() if path.exists() else None
+            note = merge_note(existing, self.template.render(**context), node.last_modified_ms)
+            if note != existing:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(note)
+            return True, None, node.last_modified_time
 
         except Exception as e:
             logger.error(f"[red]{e}[/red]", extra={"markup": True})
             raise e
         finally:
-            for f in self.cache_dir.glob("*.png"):
-                try:
-                    os.remove(f)
-                except Exception as e:
-                    logger.error(f"[red]{e}[/red]", extra={"markup": True})
-
-        return False, None, node.last_modified_time
+            for highlight in highlights:
+                if isinstance(highlight, ImageHighlight):
+                    Path(highlight.image_path).unlink(missing_ok=True)
 
 
 def paper_title_getter(x: File) -> str:
@@ -256,14 +231,12 @@ def update_notes(
     highlight_extractor: Callable[[File], list[Highlight]] | None = None,
     force=False,
 ):
-    if path.startswith(prefix):
-        updated, prev_last_modified, new_last_modified = writer.update(
-            node, force=force, highlights=highlight_extractor(node)
-        )
-        if updated and prev_last_modified != new_last_modified:
-            branch = tree_node.add(f"{node.name} [green]✓[/green]")
-        else:
-            branch = tree_node.add(f"{node.name} [yellow]〰[/yellow]")
+    if path.startswith(prefix) and node.is_document and writer.should_update(node, force):
+        updated, _, _ = writer.update(node, force=True, highlights=highlight_extractor(node))
+        mark = "[green]✓[/green]" if updated else "[yellow]〰[/yellow]"
+        branch = tree_node.add(f"{node.name} {mark}")
+    elif path.startswith(prefix):
+        branch = tree_node.add(f"{node.name} [dim]=[/dim]")
     else:
         branch = tree_node.add(f"{node.name} [red]✗[/red]")
 

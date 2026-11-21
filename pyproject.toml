@@ -15,6 +15,7 @@ dependencies = [
   "rmscene",
   "jinja2>=3.1.4",
   "typer>=0.13.1",
+  "pyyaml>=6.0.3",
 ]
 
 [build-system]
@@ -48,4 +49,5 @@ dev = [
   "pillow>=11.0.0",
   "gradio>=3.36.1",
   "setuptools>=75.6.0",
+  "pytest>=9.1.1",
 ]

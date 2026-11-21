@@ -52,6 +52,42 @@ update(
 )
 ```
 
+## Re-syncing notes
+
+`MarkdownWriter` never overwrites a note wholesale. It wraps what it generates in
+
+```markdown
+<!-- rmrf:managed:start lastModified=1730576730770 -->
+...
+<!-- rmrf:managed:end -->
+```
+
+and on the next sync replaces only that region, so text you write above or below it is
+kept. In the frontmatter it refreshes the keys your template renders and leaves every
+other key alone (`publish`, your own keys). `created` and `tags` are only written when
+the note is new, and `updated` never moves backwards. `lastModified` is the tablet's
+timestamp: documents the tablet has not changed since are skipped without re-extracting
+their highlights (pass `force=True` to re-render anyway).
+
+## Zotero without the Web API
+
+`LocalZotero` reads `~/Zotero/zotero.sqlite` read-only, so it works offline and
+without Zotero running:
+
+```python
+from rmrf.utils import LocalZotero
+
+zotero = LocalZotero()
+writer = MarkdownWriter(
+    ...,
+    enable_zotero=True,
+    zotero_lookup=lambda node: zotero.find_document(node.name, paper_title_getter(node)),
+)
+```
+
+Without `zotero_lookup`, `enable_zotero=True` searches the Zotero Web API by title
+(`ZOTERO_USER_ID`, `ZOTERO_LIB_KEY`).
+
 ## Template
 
 ### Default Template
